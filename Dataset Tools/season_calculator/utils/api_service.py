@@ -2,12 +2,19 @@ import openmeteo_requests
 import pandas as pd
 import requests_cache
 from retry_requests import retry
+from ratelimit import limits, sleep_and_retry
 
-# Set up Open-Meteo client with cache and retry
+# Setup cache and retry logic
 cache_session = requests_cache.CachedSession('.cache', expire_after=3600)
 retry_session = retry(cache_session, retries=5, backoff_factor=0.2)
 openmeteo = openmeteo_requests.Client(session=retry_session)
 
+# Rate limit: 600 requests per minute = 10 per second
+CALLS = 600
+PERIOD = 60  # seconds
+
+@sleep_and_retry
+@limits(calls=CALLS, period=PERIOD)
 def get_daily_mean_temperature(lat: float, lon: float, year: int) -> pd.DataFrame:
     """
     Fetches daily mean temperature for a given latitude, longitude, and year.
