@@ -172,3 +172,8 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+
+# Python venv files
+Scripts
+pyvenv.cfg
+Include
