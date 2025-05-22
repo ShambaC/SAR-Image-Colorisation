@@ -13,7 +13,8 @@ def replace_country_names_with_iso(input_path: str, output_path: str, iso_format
     df = pd.read_parquet(input_path)
 
     tqdm.pandas(desc="Converting country names to ISO codes (pycountry fuzzy)")
-    df["country_iso"] = df["country"].progress_apply(lambda x: get_iso_code_fuzzy(x, iso_format))
+    # df["country_iso"] = df["country"].progress_apply(lambda x: get_iso_code_fuzzy(x, iso_format))
+    df["country_iso"] = df["country"].progress_map(lambda x: get_iso_code_fuzzy(x, iso_format))
 
     # Show unresolved names
     missing = df[df["country_iso"].isnull()]["country"].unique()
