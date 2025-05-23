@@ -95,6 +95,5 @@ def plot_country_smoothed_yearly_temp(parquet_path: str, country_name: str, wind
     plt.show()
 
 if __name__ == "__main__":
-    # Example: plot a country
     # plot_country_temperature("Australia")
     plot_country_smoothed_yearly_temp("../data/country_daily_avg_iso.parquet", "India")
