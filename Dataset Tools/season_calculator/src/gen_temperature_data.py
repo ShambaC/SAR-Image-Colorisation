@@ -14,6 +14,8 @@ def process_all_countries(json_path: str, year: int, output_path: str = "../data
     for country, cities in tqdm(data.items(), desc="Processing countries"):
         city_dfs = []
         for city, coords in tqdm(cities.items(), leave=False):
+            if city == "iso2" or city == "hemisphere" :
+                continue
             lat, lon = coords
             try:
                 df = get_daily_mean_temperature(lat, lon, year)
@@ -27,6 +29,8 @@ def process_all_countries(json_path: str, year: int, output_path: str = "../data
             country_df = pd.concat(city_dfs, axis=1).mean(axis=1).reset_index()
             country_df.columns = ["date", "temperature_2m_mean"]
             country_df["country"] = country
+            country_df["iso2"] = cities["iso2"]
+            country_df["hemisphere"] = cities["hemisphere"]
             country_dfs.append(country_df)
 
     # Combine all countries

@@ -14,7 +14,8 @@ res_dict = {}
 for country, cities in tqdm(df.group_by("country"), total=242) :
     country_name = country[0]
     if country_name not in res_dict :
-        res_dict[country_name] = {}
+        hemisphere = "North" if cities.item(0, "lat") > 0 else "South"
+        res_dict[country_name] = {"iso2": cities.item(0, "iso2"), "hemisphere": hemisphere}
 
     for city_name, city_details in tqdm(cities.group_by("city_ascii"), leave=False) :
         city_ascii = city_name[0]

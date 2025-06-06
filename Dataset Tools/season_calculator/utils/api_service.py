@@ -20,7 +20,7 @@ def get_daily_mean_temperature(lat: float, lon: float, year: int) -> pd.DataFram
     Fetches daily mean temperature for a given latitude, longitude, and year.
     Returns a pandas DataFrame with columns: date, temperature_2m_mean
     """
-    url = "https://historical-forecast-api.open-meteo.com/v1/forecast"
+    url = "https://archive-api.open-meteo.com/v1/archive"
     params = {
         "latitude": lat,
         "longitude": lon,
