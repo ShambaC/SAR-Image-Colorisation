@@ -31,7 +31,7 @@ def random_point_in_polygon(polygon):
         if polygon.contains(p):
             return p
 
-def sample_uniform_land_point(land_shp):
+def sample_uniform_land_point(land_shp: str):
     # Load landmass polygons
     land = gpd.read_file(land_shp)
 
@@ -63,12 +63,52 @@ def sample_uniform_land_point(land_shp):
     pt = random_point_in_polygon(chosen_poly)
     return pt.x, pt.y  # longitude, latitude
 
+def sample_uniform_coastline_point(coastline_shp: str):
+    """
+    Returns a point sampled uniformly along the total length of all coastlines.
+    """
+    # Load coastlines as lines
+    coast = gpd.read_file(coastline_shp)
+    # Flatten to a list of LineStrings
+    lines = []
+    for geom in coast.geometry:
+        if geom.is_empty:
+            continue
+        if geom.geom_type == 'LineString':
+            lines.append(geom)
+        elif geom.geom_type == 'MultiLineString':
+            lines.extend(list(geom.geoms))
+    
+    # Compute length for each line (in degrees, for EPSG:4326)
+    lengths = np.array([line.length for line in lines])
+    total_length = lengths.sum()
+    if total_length == 0:
+        raise RuntimeError("No coastline length found!")
+    
+    # Choose a line weighted by its length
+    probs = lengths / total_length
+    idx = np.random.choice(len(lines), p=probs)
+    chosen_line = lines[idx]
+    
+    # Sample a random point along the chosen line
+    dist = np.random.uniform(0, chosen_line.length)
+    pt = chosen_line.interpolate(dist)
+    return pt.x, pt.y  # longitude, latitude
+
 if __name__ == "__main__":
     land_shp = "../ne_data/ne_50m_land/ne_50m_land.shp"
-    N = 10
+    coast_shp = "../ne_data/ne_50m_coastline/ne_50m_coastline.shp"
 
-    points = [sample_uniform_land_point(land_shp) for _ in trange(N)]
+    N_LAND = 220
+    N_COAST = 40
+
+    print("Generate Land points:\n")
+    points_land = [sample_uniform_land_point(land_shp) for _ in trange(N_LAND)]
+    print("Generate Coast points:\n")
+    points_coast = [sample_uniform_coastline_point(coast_shp) for _ in trange(N_COAST)]
+
+    total_points = [*points_land, *points_coast]
     
-    lons, lats = zip(*points)
+    lons, lats = zip(*total_points)
     df = pl.DataFrame({ "Longitude": lons, "Latitude": lats })
-    df.write_csv("../data/Global_spots.csv")
+    df.write_csv("../data/global_points.csv")
