@@ -6,6 +6,8 @@ from requests_oauthlib import OAuth2Session
 
 import pandas as pd
 
+SEN2_COLLECTION_ID = 'byoc-5460de54-082e-473a-b6ea-d5cbe3c17cca'
+
 def saveImage(oauth: OAuth2Session, long: float, lat: float, idx: int, log_file: TextIOWrapper, fromDateTime: str, toDateTime: str, folder: str) -> tuple[str] :
     INITIAL_LONGITUDE = long
     INITIAL_LATITUDE = lat
@@ -29,13 +31,13 @@ def saveImage(oauth: OAuth2Session, long: float, lat: float, idx: int, log_file:
     //VERSION=3
     function setup() {
         return {
-            input: ["VV"],
-            output: { id: "default", bands: 1 }
+            input: ["B02", "B03", "B04"],
+            output: { bands: 3 }
         };
     }
 
     function evaluatePixel(sample) {
-        return [2 * sample.VV];
+        return [2.5 * sample.B04/10000, 2.5 * sample.B03/10000, 2.5 * sample.B02/10000];
     }
 
     """
@@ -48,7 +50,7 @@ def saveImage(oauth: OAuth2Session, long: float, lat: float, idx: int, log_file:
 
     region = ""
 
-    Path(f"../Images/{folder}/s1_{folder[2:]}").mkdir(parents=True, exist_ok=True)
+    Path(f"../Images/{folder}/s2_{folder[2:]}").mkdir(parents=True, exist_ok=True)
 
     if INITIAL_LATITUDE <= 23.5 and INITIAL_LATITUDE >= -23.5 :
         region = "tropical"
@@ -57,7 +59,7 @@ def saveImage(oauth: OAuth2Session, long: float, lat: float, idx: int, log_file:
     else :
         region = "arctic"
 
-    fileName = f"../Images/{folder}/s1_{folder[2:]}/img_p{idx}.png"
+    fileName = f"../Images/{folder}/s2_{folder[2:]}/img_p{idx}.png"
 
     ########################################################################
     #                              REQUEST                                 #
@@ -66,8 +68,7 @@ def saveImage(oauth: OAuth2Session, long: float, lat: float, idx: int, log_file:
     request = {
         "input": {
             "bounds": {
-                "bbox": bbox,
-                "properties": { "crs": "http://www.opengis.net/def/crs/EPSG/0/4326" }
+                "bbox": bbox
             },
             "data": [
                 {
@@ -75,20 +76,9 @@ def saveImage(oauth: OAuth2Session, long: float, lat: float, idx: int, log_file:
                         "timerange": {
                             "from": fromDateTime,
                             "to": toDateTime
-                        },
-                        "resolution": "HIGH",
-                        "acquisitionMode": "IW"
-                    },
-                    "processing": {
-                        "orthorectify": "true",
-                        "demInstance": "COPERNICUS_30",
-                        "speckleFilter": {
-                            "type": "LEE",
-                            "windowSizeX": 5,
-                            "windowSizeY": 5
                         }
                     },
-                    "type": "sentinel-1-grd",
+                    "type": SEN2_COLLECTION_ID
                 }
             ]
         },
@@ -116,24 +106,21 @@ def saveImage(oauth: OAuth2Session, long: float, lat: float, idx: int, log_file:
             fp.write(response.content)
 
         log_file.write("Done saving file\n\n")
-        return (f"{folder}/s1_{folder[2:]}/img_p{idx}.png", f"{folder}/s2_{folder[2:]}/img_p{idx}.png", region)
+        return (fileName, region)
     else :
         log_file.write(f"Response code: {response.status_code}\n")
         log_file.write(f"{response.content}\n\n")
-        return ("error", "error", "error")
+        return ("error", "error")
 
 
 if __name__ == "__main__" :
     import datetime
     from time import time
-    from utils.rev_geocode import get_country
-    from utils.season_map import classify_season
 
     csv_file_name = "r_000"
 
     # Iterate through rows and download images
     df = pd.read_csv(f"../data/regions/{csv_file_name}.csv")
-    data_list = []
 
     log_file = open("LOG.txt", 'a')
     log_file.write(f"LOGS FOR: {datetime.datetime.now()}\n")
@@ -151,22 +138,12 @@ if __name__ == "__main__" :
         long = row.Longitude
         lat = row.Latitude
 
-        country = get_country(lat, long)
-        if country == "error" :
-            continue
-
         fromDateTime = "2023-09-29T23:59:59Z"
         toDateTime = "2023-10-30T00:00:00Z"
 
-        season = classify_season(country, fromDateTime, "North" if lat > 0 else "South")
-
-        s1_fileName, s2_fileName, region = saveImage(oauth, long, lat, idx, log_file, fromDateTime, toDateTime, csv_file_name)
+        fileName, region = saveImage(oauth, long, lat, idx, log_file, fromDateTime, toDateTime, csv_file_name)
         
-        if s1_fileName.strip().lower() == "error" :
+        if fileName.strip().lower() == "error" :
             continue
 
-        data_list.append([s1_fileName, s2_fileName, (long, lat), country, fromDateTime, 10, region, season, "IW", "VV", ("B02", "B03", "B04")])
-
-    prompt_df = pd.DataFrame(data_list, columns=['s1_fileName', 's2_fileName', 'coordinates', 'country', 'date-time', 'scale', 'region', 'season', 'operational-mode', 'polarisation', 'bands'])
-    prompt_df.to_csv(f"../Images/data_{csv_file_name}.csv", index=False)
     log_file.close()
