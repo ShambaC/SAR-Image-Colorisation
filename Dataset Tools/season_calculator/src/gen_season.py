@@ -40,11 +40,12 @@ def find_transition_date(temps, dates, ref_idx, threshold, direction="backward",
 def detect_season_boundaries(df: pl.DataFrame, min_days=30, tolerance=0.3) -> dict:
     temps = df["temperature_2m_mean"].to_numpy()
     dates = df["date"].to_list()
+    hemisphere = df["hemisphere"][0]
 
     min_temp = temps.min()
     max_temp = temps.max()
-    min_idx = np.argmin(temps)
-    max_idx = np.argmax(temps)
+    min_idx = np.where(temps == min_temp)[0][0] if hemisphere == "North" else np.where(temps == min_temp)[0][-1]
+    max_idx = np.where(temps == max_temp)[0][0] if hemisphere == "North" else np.where(temps == max_temp)[0][-1]
 
     d = max_temp - min_temp
     lower_t = min_temp + d / 4
@@ -65,7 +66,7 @@ def detect_season_boundaries(df: pl.DataFrame, min_days=30, tolerance=0.3) -> di
     fall_end = winter_start
 
     return {
-        "country": df["country"][0],
+        "country": df["iso2"][0],
         "winter_start": winter_start,
         "winter_end": winter_end,
         "spring_start": spring_start,
@@ -79,13 +80,13 @@ def detect_season_boundaries(df: pl.DataFrame, min_days=30, tolerance=0.3) -> di
 
 def generate_season_boundaries(input_parquet: str, output_parquet: str):
     df = pl.read_parquet(input_parquet)
-    country_codes = df["country"].unique().to_list()
+    country_codes = df["iso2"].unique().to_list()
     results = []
 
     for code in tqdm(country_codes, desc="Computing season boundaries"):
-        df_country = df.filter(pl.col("country") == code).sort("date")
+        df_country = df.filter(pl.col("iso2") == code).sort("date")
         try:
-            season_data = detect_season_boundaries(df_country, min_days=15, tolerance=0.3)
+            season_data = detect_season_boundaries(df_country, min_days=7, tolerance=0.3)
             results.append(season_data)
         except Exception as e:
             print(f"Skipping {code}: {e}")
@@ -96,6 +97,6 @@ def generate_season_boundaries(input_parquet: str, output_parquet: str):
 
 if __name__ == "__main__":
     generate_season_boundaries(
-        "../data/country_daily_avg_iso.parquet",
+        "../data/country_daily_avg.parquet",
         "../data/country_season_boundaries.parquet"
     )
