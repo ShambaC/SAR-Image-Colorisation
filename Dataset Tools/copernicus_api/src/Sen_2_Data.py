@@ -115,6 +115,7 @@ def saveImage(oauth: OAuth2Session, long: float, lat: float, idx: int, log_file:
 
 if __name__ == "__main__" :
     import datetime
+    import random
     from time import time
 
     csv_file_name = "r_000"
@@ -127,6 +128,17 @@ if __name__ == "__main__" :
 
     oauth, token = getOAuth()
 
+    DateTupleList = [
+        ("2023-09-29T23:59:59Z", "2023-10-30T00:00:00Z"),
+        ("2023-01-29T23:59:59Z", "2023-02-27T00:00:00Z"),
+        ("2023-06-29T23:59:59Z", "2023-07-30T00:00:00Z"),
+        ("2023-11-29T23:59:59Z", "2023-12-30T00:00:00Z")
+    ]
+
+    randomDateTimeTuple = random.choice(DateTupleList)
+    fromDateTime = randomDateTimeTuple[0]
+    toDateTime = randomDateTimeTuple[1]
+
     for row in tqdm(df.itertuples(), total=df.shape[0]) :
 
         idx = row.Index
@@ -137,9 +149,6 @@ if __name__ == "__main__" :
 
         long = row.Longitude
         lat = row.Latitude
-
-        fromDateTime = "2023-09-29T23:59:59Z"
-        toDateTime = "2023-10-30T00:00:00Z"
 
         fileName, region = saveImage(oauth, long, lat, idx, log_file, fromDateTime, toDateTime, csv_file_name)
         

@@ -125,6 +125,7 @@ def saveImage(oauth: OAuth2Session, long: float, lat: float, idx: int, log_file:
 
 if __name__ == "__main__" :
     import datetime
+    import random
     from time import time
     from utils.rev_geocode import get_country
     from utils.season_map import classify_season
@@ -140,6 +141,17 @@ if __name__ == "__main__" :
 
     oauth, token = getOAuth()
 
+    DateTupleList = [
+        ("2023-09-29T23:59:59Z", "2023-10-30T00:00:00Z"),
+        ("2023-01-29T23:59:59Z", "2023-02-27T00:00:00Z"),
+        ("2023-06-29T23:59:59Z", "2023-07-30T00:00:00Z"),
+        ("2023-11-29T23:59:59Z", "2023-12-30T00:00:00Z")
+    ]
+
+    randomDateTimeTuple = random.choice(DateTupleList)
+    fromDateTime = randomDateTimeTuple[0]
+    toDateTime = randomDateTimeTuple[1]
+
     for row in tqdm(df.itertuples(), total=df.shape[0]) :
 
         idx = row.Index
@@ -154,9 +166,6 @@ if __name__ == "__main__" :
         country = get_country(lat, long)
         if country == "error" :
             continue
-
-        fromDateTime = "2023-09-29T23:59:59Z"
-        toDateTime = "2023-10-30T00:00:00Z"
 
         season = classify_season(country, fromDateTime, "North" if lat > 0 else "South")
 
