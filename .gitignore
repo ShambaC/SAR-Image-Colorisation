@@ -177,4 +177,4 @@ cython_debug/
 Scripts
 pyvenv.cfg
 Include
-/Dataset/*
+Dataset
