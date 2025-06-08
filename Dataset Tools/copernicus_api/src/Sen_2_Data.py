@@ -149,7 +149,7 @@ if __name__ == "__main__" :
         fromDateTime = randomDateTimeTuple[0]
         toDateTime = randomDateTimeTuple[1]
 
-        for row in tqdm(df.itertuples(), total=df.shape[0]) :
+        for row in tqdm(df.itertuples(), total=df.shape[0], leave=False) :
 
             idx = row.Index
 
