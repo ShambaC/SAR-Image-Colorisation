@@ -21,7 +21,8 @@ for csv_file in tqdm(filtered_files) :
 
     k = 0
     for row in tqdm(df.itertuples(), total=df.shape[0], leave=False) :
-
+        print(row)
+        break
         idx = row.Index
 
         if not os.path.exists(f"../Images/{row.s1_fileName}") or not os.path.exists(f"../Images/{row.s2_fileName}") :
@@ -48,15 +49,15 @@ for csv_file in tqdm(filtered_files) :
                 f"{outputFolder_s2}/img_p{k}.png",
                 row.coordinates,
                 row.country,
-                row._6,
+                row._5,
                 row.scale,
                 row.region,
                 row.season,
-                row._10,
+                row._9,
                 row.polarisation,
                 row.bands
                 ])
-            
+    break        
     data_df = pd.DataFrame(data_list, columns=["s1_fileName", "s2_fileName", 'coordinates', 'country', 'date-time', 'scale', 'region', 'season', 'operational-mode', 'polarisation', 'bands'])
     data_df.to_csv(f"../../../Dataset/{csv_file}", index=False)
 
