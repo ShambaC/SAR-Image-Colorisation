@@ -24,8 +24,11 @@ for csv_file in tqdm(filtered_files) :
 
         idx = row.Index
 
-        s1_image = cv.imread(f"Images/{row.s1_fileName}")
-        s2_image = cv.imread(f"Images/{row.s2_fileName}")
+        if not os.path.exists(f"../Images/{row.s1_fileName}") or not os.path.exists(f"../Images/{row.s2_fileName}") :
+            continue
+
+        s1_image = cv.imread(f"../Images/{row.s1_fileName}")
+        s2_image = cv.imread(f"../Images/{row.s2_fileName}")
 
         for i in tqdm(range(81), leave=False) :
 
