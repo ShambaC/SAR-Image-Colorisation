@@ -15,9 +15,9 @@ for csv_file in tqdm(filtered_files) :
     data_list = []
 
     outputFolder_s1 = Path(df.iloc[0].s1_fileName).parent.__str__()
-    Path(f"../../Dataset/{outputFolder_s1}").mkdir(parents=True, exist_ok=True)
+    Path(f"../../../Dataset/{outputFolder_s1}").mkdir(parents=True, exist_ok=True)
     outputFolder_s2 = Path(df.iloc[0].s2_fileName).parent.__str__()
-    Path(f"../../Dataset/{outputFolder_s2}").mkdir(parents=True, exist_ok=True)
+    Path(f"../../../Dataset/{outputFolder_s2}").mkdir(parents=True, exist_ok=True)
 
     k = 0
     for row in tqdm(df.itertuples(), total=df.shape[0], leave=False) :
@@ -40,24 +40,24 @@ for csv_file in tqdm(filtered_files) :
             crop_s1 = s1_image[256*x : 256*(x+1), 256*y : 256*(y+1)]
             crop_s2 = s2_image[256*x : 256*(x+1), 256*y : 256*(y+1)]
 
-            cv.imwrite(f"../../Dataset/{outputFolder_s1}/img_p{k}.png", crop_s1)
-            cv.imwrite(f"../../Dataset/{outputFolder_s2}/img_p{k}.png", crop_s2)
+            cv.imwrite(f"../../../Dataset/{outputFolder_s1}/img_p{k}.png", crop_s1)
+            cv.imwrite(f"../../../Dataset/{outputFolder_s2}/img_p{k}.png", crop_s2)
 
             data_list.append([
                 f"{outputFolder_s1}/img_p{k}.png",
                 f"{outputFolder_s2}/img_p{k}.png",
-                row["coordinates"],
-                row["country"],
-                row["date-time"],
-                row["scale"],
-                row["region"],
-                row["season"],
-                row["operational-mode"],
-                row["polarisation"],
-                row["bands"]
+                row.coordinates,
+                row.country,
+                row._6,
+                row.scale,
+                row.region,
+                row.season,
+                row._10,
+                row.polarisation,
+                row.bands
                 ])
             
     data_df = pd.DataFrame(data_list, columns=["s1_fileName", "s2_fileName", 'coordinates', 'country', 'date-time', 'scale', 'region', 'season', 'operational-mode', 'polarisation', 'bands'])
-    data_df.to_csv(f"../../Dataset/{csv_file}", index=False)
+    data_df.to_csv(f"../../../Dataset/{csv_file}", index=False)
 
 print("DONE")
