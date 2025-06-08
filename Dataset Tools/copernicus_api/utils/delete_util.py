@@ -3,15 +3,15 @@ import os
 
 from tqdm import tqdm
 
-folder_name = "r_000"
+folder_name = "r_008"
 df = pd.read_csv(f"../Images/data_{folder_name}.csv")
 
 # To be edited
-delete_list = []
+delete_list = [1, 7, 9, 10, 11]
 
-delete_file_names = [f"r_000/s1_000/img_p{mark}.png" for mark in delete_list]
+delete_file_names = [f"{folder_name}/s1_{folder_name[2:]}/img_p{mark}.png" for mark in delete_list]
 df = df[~df["s1_fileName"].isin(delete_file_names)]
-df.to_csv(f"../Images/data_{folder_name}.csv")
+df.to_csv(f"../Images/data_{folder_name}.csv", index=False)
 
 for mark in tqdm(delete_list) :
     s1_file = f"../Images/{folder_name}/s1_{folder_name[2:]}/img_p{mark}.png"
