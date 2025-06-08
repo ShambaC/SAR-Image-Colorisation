@@ -1,6 +1,6 @@
 from utils.authclient import getOAuth
 from utils.calc_coords import getCoords
-from tqdm import tqdm
+from tqdm import tqdm, trange
 from io import TextIOWrapper
 from requests_oauthlib import OAuth2Session
 
@@ -130,52 +130,61 @@ if __name__ == "__main__" :
     from utils.rev_geocode import get_country
     from utils.season_map import classify_season
 
-    csv_file_name = "r_000"
+    partition = (0, 45)
+    # partition = (45, 90)
+    # partition = (90, 133)
+    # partition = (133, 176)
+    # partition = (176, 219)
+    # partition = (219, 260)
 
-    # Iterate through rows and download images
-    df = pd.read_csv(f"../data/regions/{csv_file_name}.csv")
-    data_list = []
+    for iter in trange(partition[0], partition[1]) :
 
-    log_file = open("LOG.txt", 'a')
-    log_file.write(f"LOGS FOR: {datetime.datetime.now()}\n")
+        csv_file_name = "r_{iter:03}"
 
-    oauth, token = getOAuth()
+        # Iterate through rows and download images
+        df = pd.read_csv(f"../data/regions/{csv_file_name}.csv")
+        data_list = []
 
-    DateTupleList = [
-        ("2023-09-29T23:59:59Z", "2023-10-30T00:00:00Z"),
-        ("2023-01-29T23:59:59Z", "2023-02-27T00:00:00Z"),
-        ("2023-06-29T23:59:59Z", "2023-07-30T00:00:00Z"),
-        ("2023-11-29T23:59:59Z", "2023-12-30T00:00:00Z")
-    ]
+        log_file = open("LOG.txt", 'a')
+        log_file.write(f"LOGS FOR: {datetime.datetime.now()}\n")
 
-    randomDateTimeTuple = random.choice(DateTupleList)
-    fromDateTime = randomDateTimeTuple[0]
-    toDateTime = randomDateTimeTuple[1]
+        oauth, token = getOAuth()
 
-    for row in tqdm(df.itertuples(), total=df.shape[0]) :
+        DateTupleList = [
+            ("2023-09-29T23:59:59Z", "2023-10-30T00:00:00Z"),
+            ("2023-01-29T23:59:59Z", "2023-02-27T00:00:00Z"),
+            ("2023-06-29T23:59:59Z", "2023-07-30T00:00:00Z"),
+            ("2023-11-29T23:59:59Z", "2023-12-30T00:00:00Z")
+        ]
 
-        idx = row.Index
+        randomDateTimeTuple = random.choice(DateTupleList)
+        fromDateTime = randomDateTimeTuple[0]
+        toDateTime = randomDateTimeTuple[1]
 
-        # Refresh token
-        if time() > (token["expires_at"] - 20) :
-            oauth, token = getOAuth()
+        for row in tqdm(df.itertuples(), total=df.shape[0], leave=False) :
 
-        long = row.Longitude
-        lat = row.Latitude
+            idx = row.Index
 
-        country = get_country(lat, long)
-        if country == "error" :
-            continue
+            # Refresh token
+            if time() > (token["expires_at"] - 20) :
+                oauth, token = getOAuth()
 
-        season = classify_season(country, fromDateTime, "North" if lat > 0 else "South")
+            long = row.Longitude
+            lat = row.Latitude
 
-        s1_fileName, s2_fileName, region = saveImage(oauth, long, lat, idx, log_file, fromDateTime, toDateTime, csv_file_name)
-        
-        if s1_fileName.strip().lower() == "error" :
-            continue
+            country = get_country(lat, long)
+            if country == "error" :
+                continue
 
-        data_list.append([s1_fileName, s2_fileName, (long, lat), country, fromDateTime, 10, region, season, "IW", "VV", ("B02", "B03", "B04")])
+            season = classify_season(country, fromDateTime, "North" if lat > 0 else "South")
 
-    prompt_df = pd.DataFrame(data_list, columns=['s1_fileName', 's2_fileName', 'coordinates', 'country', 'date-time', 'scale', 'region', 'season', 'operational-mode', 'polarisation', 'bands'])
-    prompt_df.to_csv(f"../Images/data_{csv_file_name}.csv", index=False)
-    log_file.close()
+            s1_fileName, s2_fileName, region = saveImage(oauth, long, lat, idx, log_file, fromDateTime, toDateTime, csv_file_name)
+            
+            if s1_fileName.strip().lower() == "error" :
+                continue
+
+            data_list.append([s1_fileName, s2_fileName, (long, lat), country, fromDateTime, 10, region, season, "IW", "VV", ("B02", "B03", "B04")])
+
+        prompt_df = pd.DataFrame(data_list, columns=['s1_fileName', 's2_fileName', 'coordinates', 'country', 'date-time', 'scale', 'region', 'season', 'operational-mode', 'polarisation', 'bands'])
+        prompt_df.to_csv(f"../Images/data_{csv_file_name}.csv", index=False)
+        log_file.close()
