@@ -12,6 +12,10 @@ filtered_files = [x for x in total_list if x.endswith(".csv")]
 for csv_file in tqdm(filtered_files) :
 
     df = pd.read_csv(f"../Images/{csv_file}")
+    
+    if df.shape[0] == 0 :
+        continue
+
     data_list = []
 
     outputFolder_s1 = Path(df.iloc[0].s1_fileName).parent.__str__()
