@@ -117,6 +117,7 @@ if __name__ == "__main__" :
     import datetime
     import random
     from time import time
+    from utils.rev_geocode import get_country
 
     partition = (0, 45)
     # partition = (45, 90)
@@ -158,6 +159,10 @@ if __name__ == "__main__" :
 
             long = row.Longitude
             lat = row.Latitude
+
+            country = get_country(lat, long)
+            if country == "error" :
+                continue
 
             fileName, region = saveImage(oauth, long, lat, idx, log_file, fromDateTime, toDateTime, csv_file_name)
             
