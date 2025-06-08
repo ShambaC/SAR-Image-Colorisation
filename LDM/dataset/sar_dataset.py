@@ -14,10 +14,34 @@ class SARDataset(Dataset):
     """
     SAR Dataset for image-to-image translation with text conditioning.
     Loads paired SAR (Sentinel-1) and optical (Sentinel-2) images with metadata.
+    Supports proper train/validation/test splits with reproducible data splitting.
     """
     
     def __init__(self, split, im_path, im_size=256, im_channels=3, im_ext='png',
-                 use_latents=False, latent_path=None, condition_config=None):
+                 use_latents=False, latent_path=None, condition_config=None,
+                 metadata_file=None, train_split=0.7, val_split=0.15, test_split=0.15, 
+                 random_seed=42):
+        """
+        Initialize SAR Dataset with proper train/val/test splitting
+        
+        Args:
+            split: 'train', 'val', or 'test'
+            im_path: Path to dataset directory
+            im_size: Image size for resizing
+            im_channels: Number of image channels
+            im_ext: Image file extension
+            use_latents: Whether to use precomputed latents
+            latent_path: Path to latent files
+            condition_config: Configuration for conditioning types
+            metadata_file: Specific metadata CSV file to use (if None, loads from split-specific files)
+            train_split: Proportion for training set
+            val_split: Proportion for validation set  
+            test_split: Proportion for test set
+            random_seed: Random seed for reproducible splits
+        """
+        assert split in ['train', 'val', 'test'], f"Split must be 'train', 'val', or 'test', got {split}"
+        assert abs(train_split + val_split + test_split - 1.0) < 1e-6, "Split proportions must sum to 1.0"
+        
         self.split = split
         self.im_size = im_size
         self.im_channels = im_channels
@@ -25,14 +49,15 @@ class SARDataset(Dataset):
         self.im_path = im_path
         self.latent_maps = None
         self.use_latents = False
+        self.random_seed = random_seed
         
         # Get condition types
         self.condition_types = [] if condition_config is None else condition_config['condition_types']
         
-        # Load dataset
-        self.s1_images, self.s2_images, self.text_prompts = self.load_dataset(im_path)
-        
-        # Whether to load images or to load latents
+        # Load dataset with proper splitting
+        self.s1_images, self.s2_images, self.text_prompts = self.load_dataset_with_splits(
+            im_path, metadata_file, train_split, val_split, test_split)
+          # Whether to load images or to load latents
         if use_latents and latent_path is not None:
             latent_maps = load_latents(latent_path)
             if len(latent_maps) == len(self.s2_images):
@@ -42,48 +67,131 @@ class SARDataset(Dataset):
             else:
                 print('Latents not found')
     
-    def load_dataset(self, dataset_path):
+    def load_dataset_with_splits(self, dataset_path, metadata_file, train_split, val_split, test_split):
         """
-        Load all SAR-optical image pairs with metadata from CSV files
+        Load SAR-optical image pairs with proper train/val/test splitting
+        
+        Two modes:
+        1. If metadata_file is provided: Use that specific CSV file and split it
+        2. If metadata_file is None: Look for pre-split files (train_metadata.csv, val_metadata.csv, test_metadata.csv)
+           or load all CSV files and create splits
         """
-        assert os.path.exists(dataset_path), "Dataset path {} does not exist".format(dataset_path)
+        assert os.path.exists(dataset_path), f"Dataset path {dataset_path} does not exist"
         
         s1_images = []
         s2_images = []
         text_prompts = []
         
-        # Find all CSV files
-        csv_files = glob.glob(os.path.join(dataset_path, 'data_r_*.csv'))
+        # Check for pre-split metadata files
+        pre_split_files = {
+            'train': os.path.join(dataset_path, 'train_metadata.csv'),
+            'val': os.path.join(dataset_path, 'val_metadata.csv'), 
+            'test': os.path.join(dataset_path, 'test_metadata.csv')
+        }
         
-        print(f"Found {len(csv_files)} CSV files")
-        
-        for csv_file in tqdm(csv_files, desc="Loading dataset"):
-            # Read metadata CSV
-            df = pd.read_csv(csv_file)
+        if metadata_file is not None:
+            # Use specific metadata file and split it
+            print(f"Using specific metadata file: {metadata_file}")
+            df_all = pd.read_csv(metadata_file)
+            df_split = self._create_splits(df_all, train_split, val_split, test_split)
             
-            for _, row in df.iterrows():
+        elif all(os.path.exists(f) for f in pre_split_files.values()):
+            # Use pre-existing split files
+            print(f"Using pre-split metadata files for {self.split}")
+            df_split = pd.read_csv(pre_split_files[self.split])
+            
+        else:
+            # Load all CSV files and create splits
+            print("Creating splits from all available CSV files")
+            csv_files = glob.glob(os.path.join(dataset_path, '*_metadata.csv'))
+            if not csv_files:
+                # Fallback to legacy naming
+                csv_files = glob.glob(os.path.join(dataset_path, 'data_r_*.csv'))
+            
+            if not csv_files:
+                raise FileNotFoundError(f"No metadata CSV files found in {dataset_path}")
+            
+            print(f"Found {len(csv_files)} CSV files")
+            
+            # Combine all CSV files
+            all_dfs = []
+            for csv_file in csv_files:
+                df = pd.read_csv(csv_file)
+                # Add source file info for tracking
+                df['source_file'] = os.path.basename(csv_file)
+                all_dfs.append(df)
+            
+            df_all = pd.concat(all_dfs, ignore_index=True)
+            df_split = self._create_splits(df_all, train_split, val_split, test_split)
+        
+        # Process the data for current split
+        print(f"Processing {len(df_split)} samples for {self.split} split")
+        
+        for _, row in tqdm(df_split.iterrows(), total=len(df_split), desc=f"Loading {self.split} data"):
+            # Handle different possible column names
+            if 'region_folder' in row and 's1_folder' in row and 's2_folder' in row and 'image_name' in row:
+                # New format with explicit folder structure
+                s1_path = os.path.join(dataset_path, row['region_folder'], row['s1_folder'], row['image_name'])
+                s2_path = os.path.join(dataset_path, row['region_folder'], row['s2_folder'], row['image_name'])
+            elif 's1_fileName' in row and 's2_fileName' in row:
+                # Legacy format with full file paths
                 s1_path = os.path.join(dataset_path, row['s1_fileName'])
                 s2_path = os.path.join(dataset_path, row['s2_fileName'])
+            else:
+                print(f"Warning: Unknown CSV format, skipping row {row}")
+                continue
+            
+            # Check if both images exist
+            if os.path.exists(s1_path) and os.path.exists(s2_path):
+                s1_images.append(s1_path)
+                s2_images.append(s2_path)
                 
-                # Check if both images exist
-                if os.path.exists(s1_path) and os.path.exists(s2_path):
-                    s1_images.append(s1_path)
-                    s2_images.append(s2_path)
+                # Generate text prompt from metadata
+                region = row.get('region', 'unknown')
+                season = row.get('season', 'unknown')
+                if pd.isna(region):
+                    region = 'unknown'
+                if pd.isna(season):
+                    season = 'unknown'
                     
-                    # Generate text prompt from metadata
-                    region = row['region'] if pd.notna(row['region']) else 'unknown'
-                    season = row['season'] if pd.notna(row['season']) else 'unknown'
-                    text_prompt = f"Colorise image, Region: {region}, Season: {season}"
-                    text_prompts.append(text_prompt)
+                text_prompt = f"Colorise image, Region: {region}, Season: {season}"
+                text_prompts.append(text_prompt)
+            else:
+                print(f"Warning: Missing images - S1: {os.path.exists(s1_path)}, S2: {os.path.exists(s2_path)}")
         
-        print(f'Found {len(s1_images)} SAR images')
-        print(f'Found {len(s2_images)} optical images')
-        print(f'Generated {len(text_prompts)} text prompts')
+        print(f'Loaded {len(s1_images)} SAR images for {self.split}')
+        print(f'Loaded {len(s2_images)} optical images for {self.split}')
+        print(f'Generated {len(text_prompts)} text prompts for {self.split}')
         
         assert len(s1_images) == len(s2_images) == len(text_prompts), \
             "Mismatch in number of SAR images, optical images, and text prompts"
-            
+        
         return s1_images, s2_images, text_prompts
+    
+    def _create_splits(self, df_all, train_split, val_split, test_split):
+        """
+        Create train/val/test splits from combined dataframe
+        Uses stratified splitting based on region if available
+        """
+        # Set random seed for reproducible splits
+        np.random.seed(self.random_seed)
+        
+        # Shuffle the data
+        df_shuffled = df_all.sample(frac=1, random_state=self.random_seed).reset_index(drop=True)
+        
+        n_total = len(df_shuffled)
+        n_train = int(train_split * n_total)
+        n_val = int(val_split * n_total)
+        
+        # Create splits
+        if self.split == 'train':
+            df_split = df_shuffled[:n_train]
+        elif self.split == 'val':
+            df_split = df_shuffled[n_train:n_train + n_val]
+        else:  # test
+            df_split = df_shuffled[n_train + n_val:]
+        
+        return df_split
     
     def load_image(self, image_path):
         """Load and preprocess an image"""

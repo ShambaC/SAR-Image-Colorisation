@@ -3,6 +3,10 @@ dataset_params:
   im_channels: 3
   im_size: 256
   name: 'sar'
+  # Data splitting parameters
+  train_split: 0.7
+  val_split: 0.15
+  test_split: 0.15
 
 diffusion_params:
   num_timesteps: 1000

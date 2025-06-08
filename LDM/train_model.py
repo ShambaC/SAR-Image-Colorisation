@@ -26,14 +26,17 @@ def train_autoencoder(config):
     dataset_config = config['dataset_params']
     autoencoder_model_config = config['autoencoder_params']
     train_config = config['train_params']
-    
-    # Create dataset for autoencoder training (only optical images needed)
+      # Create dataset for autoencoder training (only optical images needed)
     dataset = SARDataset(split='train',
                         im_path=dataset_config['im_path'],
                         im_size=dataset_config['im_size'],
                         im_channels=dataset_config['im_channels'],
                         use_latents=False,
-                        condition_config=None)  # No conditioning for autoencoder
+                        condition_config=None,  # No conditioning for autoencoder
+                        train_split=dataset_config.get('train_split', 0.7),
+                        val_split=dataset_config.get('val_split', 0.15),
+                        test_split=dataset_config.get('test_split', 0.15),
+                        random_seed=train_config.get('seed', 42))
     
     data_loader = DataLoader(dataset,
                            batch_size=train_config['autoencoder_batch_size'],
@@ -179,8 +182,7 @@ def train_ldm(config):
                 condition_config['text_condition_config']['text_embed_model'], 
                 device=device)
             empty_text_embed = get_text_representation([''], text_tokenizer, text_model, device)
-    
-    # Create dataset
+      # Create dataset
     dataset = SARDataset(split='train',
                         im_path=dataset_config['im_path'],
                         im_size=dataset_config['im_size'],
@@ -188,7 +190,11 @@ def train_ldm(config):
                         use_latents=train_config['save_latents'],
                         latent_path=os.path.join(train_config['task_name'],
                                                train_config['vqvae_latent_dir_name']),
-                        condition_config=condition_config)
+                        condition_config=condition_config,
+                        train_split=dataset_config.get('train_split', 0.7),
+                        val_split=dataset_config.get('val_split', 0.15),
+                        test_split=dataset_config.get('test_split', 0.15),
+                        random_seed=train_config.get('seed', 42))
     
     data_loader = DataLoader(dataset,
                            batch_size=train_config['ldm_batch_size'],

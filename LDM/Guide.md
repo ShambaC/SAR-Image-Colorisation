@@ -72,7 +72,43 @@ Each `data_r_XXX.csv` should contain:
 - `season`: Seasonal information
 - Other metadata columns (optional)
 
+### Train/Validation/Test Splits
+
+The dataset automatically handles proper train/validation/test splits with the following features:
+
+#### Automatic Splitting
+- **Default ratios**: 70% train, 15% validation, 15% test
+- **Reproducible**: Uses fixed random seed for consistent splits across runs
+- **No data leakage**: Ensures complete separation between splits
+- **Stratified by source**: Maintains region/season distribution across splits
+
+#### Split Configuration
+Configure splits in `config/sar_config.yaml`:
+```yaml
+dataset_params:
+  train_split: 0.7    # 70% for training
+  val_split: 0.15     # 15% for validation  
+  test_split: 0.15    # 15% for testing
+```
+
+#### Split Methods
+The system supports three split methods:
+
+1. **Auto-split from all data** (recommended):
+   - Place all CSV files in Dataset folder
+   - System automatically creates reproducible splits
+
+2. **Pre-split files**:
+   - Create `train_metadata.csv`, `val_metadata.csv`, `test_metadata.csv`
+   - System will use these directly
+
+3. **Single file splitting**:
+   - Use single CSV file, specify with `metadata_file` parameter
+   - System splits it according to ratios
+
 ### Data Validation
+
+#### Validate Dataset Structure
 Run this script to validate your dataset:
 ```python
 import os
@@ -102,6 +138,18 @@ def validate_dataset(dataset_path):
 # Run validation
 validate_dataset("../Dataset")
 ```
+
+#### Validate Train/Test Splits
+Test your data splitting setup:
+```bash
+python validate_splits.py
+```
+
+This script will:
+- Verify split proportions are correct
+- Check for data leakage between splits
+- Test reproducibility of splits
+- Analyze data distribution across splits
 
 ## Configuration
 
@@ -394,6 +442,51 @@ if os.path.exists(checkpoint_path):
 3. **Gradual Training:** Start with smaller images, then increase resolution
 4. **Regular Validation:** Generate samples throughout training to monitor progress
 5. **Hyperparameter Search:** Experiment with different learning rates and batch sizes
+
+## Model Validation and Testing
+
+### During Training
+The training process automatically uses:
+- **Training set**: For model parameter updates
+- **Validation set**: For monitoring overfitting (if implemented)
+- **Test set**: Reserved for final evaluation
+
+### Test Set Evaluation
+After training, evaluate your model on the test set:
+
+```python
+# Example test set evaluation
+from dataset.sar_dataset import SARDataset
+from torch.utils.data import DataLoader
+
+# Load test dataset
+test_dataset = SARDataset(
+    split='test',
+    im_path='../Dataset',
+    im_size=256,
+    im_channels=3,
+    condition_config={'condition_types': ['text', 'image']},
+    train_split=0.7,
+    val_split=0.15,
+    test_split=0.15,
+    random_seed=42
+)
+
+test_loader = DataLoader(test_dataset, batch_size=4, shuffle=False)
+
+# Run inference on test set
+for batch in test_loader:
+    optical_images, conditions = batch
+    # Your evaluation code here
+    pass
+```
+
+### Split Integrity
+The system ensures:
+- ✅ **No data leakage**: Test images never seen during training
+- ✅ **Reproducible splits**: Same random seed = same splits
+- ✅ **Balanced distribution**: Regions/seasons distributed across splits
+- ✅ **Proper proportions**: Configurable train/val/test ratios
 
 ## Support and Resources
 
