@@ -7,14 +7,16 @@ import os
 
 total_list = os.listdir("../Images")
 filtered_files = [x for x in total_list if x.endswith(".csv")]
+true_cols = ['s1_fileName', 's2_fileName', 'coordinates', 'country', 'date-time', 'scale', 'region', 'season', 'operational-mode', 'polarisation', 'bands']
 
 # Remove indexing
 for csv_file in tqdm(filtered_files) :
 
     df = pd.read_csv(f"../Images/{csv_file}")
 
-    if "Unnamed: 0" in df.columns:
-        df = df.drop(columns=["Unnamed: 0"])
+    extra_cols = [col for col in df.columns if col not in true_cols]
+    if extra_cols:
+        df = df.drop(columns=extra_cols)
 
     df.to_csv(f"../Images/{csv_file}", index=False)
 

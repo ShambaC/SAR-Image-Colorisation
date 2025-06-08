@@ -55,6 +55,7 @@ for csv_file in tqdm(filtered_files) :
                 row.polarisation,
                 row.bands
                 ])
+            
     data_df = pd.DataFrame(data_list, columns=["s1_fileName", "s2_fileName", 'coordinates', 'country', 'date-time', 'scale', 'region', 'season', 'operational-mode', 'polarisation', 'bands'])
     data_df.to_csv(f"../../../Dataset/{csv_file}", index=False)
 
