@@ -36,6 +36,7 @@ def classify_season(country: str, timestamp_iso: str, hemisphere: str) -> str:
                 return "winter"
             elif month in [9, 10, 11]:
                 return "spring"
+        return "unknown"
     row = row.row(0)
 
     # Map season names to their start/end columns
@@ -46,16 +47,17 @@ def classify_season(country: str, timestamp_iso: str, hemisphere: str) -> str:
         ("fall",   row[7], row[8]),
     ]
 
+    # Compare only month and day
+    ts_md = (timestamp.month, timestamp.day)
     for season, start, end in seasons:
-        # Convert Polars datetime to Python datetime (with UTC)
-        start = start.replace(tzinfo=pytz.UTC)
-        end = end.replace(tzinfo=pytz.UTC)
-        # Handle seasons that cross the year boundary
-        if start <= end:
-            if start <= timestamp <= end:
+        start_md = (start.month, start.day)
+        end_md = (end.month, end.day)
+        if start_md <= end_md:
+            if start_md <= ts_md <= end_md:
                 return season
         else:
-            if timestamp >= start or timestamp <= end:
+            # Season crosses year boundary
+            if ts_md >= start_md or ts_md <= end_md:
                 return season
     return "unknown"
 
