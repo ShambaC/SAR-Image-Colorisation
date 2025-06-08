@@ -127,7 +127,7 @@ if __name__ == "__main__" :
 
     for iter in trange(partition[0], partition[1]) :
 
-        csv_file_name = "r_{iter:03}"
+        csv_file_name = f"r_{iter:03}"
 
         # Iterate through rows and download images
         df = pd.read_csv(f"../data/regions/{csv_file_name}.csv")

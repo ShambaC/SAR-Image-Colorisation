@@ -130,7 +130,7 @@ if __name__ == "__main__" :
     from utils.rev_geocode import get_country
     from utils.season_map import classify_season
 
-    partition = (0, 45)
+    partition = (1, 45)
     # partition = (45, 90)
     # partition = (90, 133)
     # partition = (133, 176)
@@ -139,7 +139,7 @@ if __name__ == "__main__" :
 
     for iter in trange(partition[0], partition[1]) :
 
-        csv_file_name = "r_{iter:03}"
+        csv_file_name = f"r_{iter:03}"
 
         # Iterate through rows and download images
         df = pd.read_csv(f"../data/regions/{csv_file_name}.csv")
