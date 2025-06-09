@@ -88,7 +88,7 @@ def test_training_model_class():
     """Test the training model class initialization"""
     print("\nTesting training model class...")
     try:
-        from train_model import SARColorizer
+        from train_model import SARColorizationModel
         from tokenizer import SimpleTokenizer
         
         tokenizer = SimpleTokenizer()
@@ -99,13 +99,13 @@ def test_training_model_class():
             "n_layers": 12
         }
         
-        model = SARColorizer(tokenizer, clip_config)
+        model = SARColorizationModel(tokenizer, clip_config)
         
         # Test encode_images method with noise parameter
         test_images = torch.randn(1, 3, 256, 256)
         encoded = model.encode_images(test_images)
         
-        print(f"✅ SARColorizer model initialized successfully")
+        print(f"✅ SARColorizationModel model initialized successfully")
         print(f"   encode_images working with automatic noise generation")
         print(f"   Input shape: {test_images.shape}")
         print(f"   Output shape: {encoded.shape}")
