@@ -135,8 +135,8 @@ class SARDataset(Dataset):
                 s2_path = os.path.join(dataset_path, row['region_folder'], row['s2_folder'], row['image_name'])
             elif 's1_fileName' in row and 's2_fileName' in row:
                 # Legacy format with full file paths
-                s1_path = os.path.join(dataset_path, row['s1_fileName'])
-                s2_path = os.path.join(dataset_path, row['s2_fileName'])
+                s1_path = os.path.join(dataset_path, row['s1_fileName'].replace("\\", "/"))
+                s2_path = os.path.join(dataset_path, row['s2_fileName'].replace("\\", "/"))
             else:
                 print(f"Warning: Unknown CSV format, skipping row {row}")
                 continue
