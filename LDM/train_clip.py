@@ -170,14 +170,20 @@ class CLIPTrainer:
         loss = masked_losses.sum() / mask.sum()
         
         return loss
-    
     def train_epoch(self) -> dict:
         """Train for one epoch"""
         self.model.train()
         total_loss = 0.0
         num_batches = 0
         
-        progress_bar = tqdm(self.train_loader, desc=f"Epoch {self.current_epoch}")
+        progress_bar = tqdm(
+            self.train_loader, 
+            desc=f"Epoch {self.current_epoch}",
+            unit="batch",
+            leave=True,
+            dynamic_ncols=True,
+            ascii=True
+        )
         
         for batch in progress_bar:
             # Prepare data
@@ -229,18 +235,31 @@ class CLIPTrainer:
         self.model.eval()
         total_loss = 0.0
         num_batches = 0
-        
         with torch.no_grad():
-            for batch in tqdm(self.val_loader, desc="Validating"):
+            progress_bar = tqdm(
+                self.val_loader, 
+                desc="Validation",
+                unit="batch",
+                leave=True,
+                dynamic_ncols=True,
+                ascii=True
+            )
+            
+            for batch in progress_bar:
                 prompts = batch['prompt']
                 token_ids = self.tokenizer.encode_batch(prompts).to(self.device)
-                
                 outputs = self.model(token_ids)
                 targets = token_ids.clone()
                 loss = self.compute_loss(outputs, targets)
                 
                 total_loss += loss.item()
                 num_batches += 1
+                
+                # Update progress bar
+                progress_bar.set_postfix({
+                    'val_loss': f"{loss.item():.4f}",
+                    'avg_loss': f"{total_loss/num_batches:.4f}"
+                })
         
         avg_loss = total_loss / num_batches if num_batches > 0 else 0.0
         
@@ -289,14 +308,24 @@ class CLIPTrainer:
         self.global_step = checkpoint['global_step']
         
         print(f"Loaded checkpoint from epoch {self.current_epoch}")
-    
     def train(self):
         """Main training loop"""
         print(f"Starting training for {self.config['epochs']} epochs")
         
         best_val_loss = float('inf')
         
-        for epoch in range(self.current_epoch, self.config['epochs']):
+        # Create epoch progress bar
+        epoch_progress = tqdm(
+            range(self.current_epoch, self.config['epochs']),
+            desc="Training Progress",
+            unit="epoch",
+            position=0,
+            leave=True,
+            dynamic_ncols=True,
+            ascii=True
+        )
+        
+        for epoch in epoch_progress:
             self.current_epoch = epoch
             
             # Train epoch
@@ -310,10 +339,16 @@ class CLIPTrainer:
             self.writer.add_scalar('Loss/Val', val_metrics['val_loss'], epoch)
             self.writer.add_scalar('Perplexity/Val', val_metrics['perplexity'], epoch)
             self.writer.add_scalar('Learning_Rate', self.optimizer.param_groups[0]['lr'], epoch)
-            
             print(f"Epoch {epoch}: Train Loss: {train_metrics['train_loss']:.4f}, "
                   f"Val Loss: {val_metrics['val_loss']:.4f}, "
                   f"Perplexity: {val_metrics['perplexity']:.4f}")
+            
+            # Update epoch progress bar
+            epoch_progress.set_postfix({
+                'train_loss': f"{train_metrics['train_loss']:.4f}",
+                'val_loss': f"{val_metrics['val_loss']:.4f}",
+                'perplexity': f"{val_metrics['perplexity']:.4f}"
+            })
             
             # Save checkpoint
             is_best = val_metrics['val_loss'] < best_val_loss

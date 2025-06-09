@@ -325,14 +325,20 @@ class SARTrainer:
             )
         else:
             return None
-    
     def train_epoch(self) -> dict:
         """Train for one epoch"""
         self.model.train()
         total_loss = 0.0
         num_batches = 0
         
-        progress_bar = tqdm(self.train_loader, desc=f"Epoch {self.current_epoch}")
+        progress_bar = tqdm(
+            self.train_loader, 
+            desc=f"Training Epoch {self.current_epoch}",
+            unit="batch",
+            leave=True,
+            dynamic_ncols=True,
+            ascii=True
+        )
         
         for batch in progress_bar:
             # Prepare data
@@ -378,7 +384,6 @@ class SARTrainer:
         
         avg_loss = total_loss / num_batches if num_batches > 0 else 0.0
         return {"train_loss": avg_loss}
-    
     def validate(self) -> dict:
         """Validate the model"""
         self.model.eval()
@@ -386,7 +391,16 @@ class SARTrainer:
         num_batches = 0
         
         with torch.no_grad():
-            for batch in tqdm(self.val_loader, desc="Validation"):
+            progress_bar = tqdm(
+                self.val_loader, 
+                desc="Validation",
+                unit="batch",
+                leave=True,
+                dynamic_ncols=True,
+                ascii=True
+            )
+            
+            for batch in progress_bar:
                 # Prepare data
                 sar_images = batch['s1_image'].to(self.device)
                 optical_images = batch['s2_image'].to(self.device)
@@ -394,12 +408,17 @@ class SARTrainer:
                 
                 # Forward pass
                 predicted_noise, target_noise = self.model(sar_images, prompts)
-                
-                # Compute loss
+                  # Compute loss
                 loss = self.loss_fn(predicted_noise, target_noise)
                 
                 total_loss += loss.item()
                 num_batches += 1
+                
+                # Update progress bar
+                progress_bar.set_postfix({
+                    'val_loss': f"{loss.item():.4f}",
+                    'avg_loss': f"{total_loss/num_batches:.4f}"
+                })
         
         avg_loss = total_loss / num_batches if num_batches > 0 else 0.0
         return {"val_loss": avg_loss}
@@ -445,17 +464,28 @@ class SARTrainer:
         
         print(f"Checkpoint loaded: {checkpoint_path}")
         print(f"Resuming from epoch {self.current_epoch}")
-    
     def train(self, resume_from: str = None):
         """Main training loop"""
         if resume_from:
             self.load_checkpoint(resume_from)
         
         best_val_loss = float('inf')
-        for epoch in range(self.current_epoch, self.config.get("training", {}).get("epochs", 100)):
-            self.current_epoch = epoch
-            
-            print(f"\nEpoch {epoch}/{self.config.get('training', {}).get('epochs', 100)}")
+        total_epochs = self.config.get("training", {}).get("epochs", 100)
+        
+        # Create epoch progress bar
+        epoch_progress = tqdm(
+            range(self.current_epoch, total_epochs),
+            desc="Training Progress",
+            unit="epoch",
+            position=0,
+            leave=True,
+            dynamic_ncols=True,
+            ascii=True
+        )
+        
+        for epoch in epoch_progress:
+            self.current_epoch = epoch            
+            print(f"\nEpoch {epoch}/{total_epochs}")
             print("-" * 50)
             
             # Training
@@ -474,10 +504,16 @@ class SARTrainer:
             # Log to tensorboard
             for key, value in metrics.items():
                 self.writer.add_scalar(f"Epoch/{key}", value, epoch)
-            
-            # Print metrics
+              # Print metrics
             print(f"Train Loss: {metrics['train_loss']:.4f}")
             print(f"Val Loss: {metrics['val_loss']:.4f}")
+            
+            # Update epoch progress bar
+            epoch_progress.set_postfix({
+                'train_loss': f"{metrics['train_loss']:.4f}",
+                'val_loss': f"{metrics['val_loss']:.4f}",
+                'lr': f"{self.optimizer.param_groups[0]['lr']:.2e}"
+            })
             
             # Save checkpoint
             is_best = metrics['val_loss'] < best_val_loss
