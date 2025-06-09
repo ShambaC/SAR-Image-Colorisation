@@ -155,12 +155,11 @@ try:
     img_size = config['dataset_params']['im_size']
     
     dummy_image = torch.randn(batch_size, channels, img_size, img_size).to(device)
-    
-    # Test VQVAE forward pass
+      # Test VQVAE forward pass
     with torch.no_grad():
         vqvae_output = vqvae(dummy_image)
         if isinstance(vqvae_output, tuple):
-            reconstructed, vq_losses = vqvae_output
+            reconstructed, z, vq_losses = vqvae_output
         else:
             reconstructed = vqvae_output
         print("✓ VQVAE forward pass successful!")
