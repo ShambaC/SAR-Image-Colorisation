@@ -109,6 +109,42 @@ class SimpleTokenizer:
         token_ids = [self.encode(text) for text in texts]
         return torch.tensor(token_ids, dtype=torch.long)
     
+    def batch_encode_plus(self, texts: List[str], padding: str = "max_length", max_length: int = None):
+        """
+        Encode a batch of texts and return in HuggingFace tokenizer format
+        
+        Args:
+            texts: List of texts to encode
+            padding: Padding strategy ('max_length' supported)
+            max_length: Maximum length (uses tokenizer's max_length if None)
+            
+        Returns:
+            Object with input_ids attribute containing token ids
+        """
+        if max_length is None:
+            max_length = self.max_length
+            
+        # Encode each text
+        token_ids = []
+        for text in texts:
+            ids = self.encode(text)
+            
+            # Apply padding or truncation to match max_length
+            if len(ids) > max_length:
+                ids = ids[:max_length]
+            elif len(ids) < max_length:
+                pad_id = self.vocab[self.pad_token]
+                ids.extend([pad_id] * (max_length - len(ids)))
+            
+            token_ids.append(ids)
+        
+        # Return object with input_ids attribute (similar to HuggingFace tokenizer)
+        class TokenizerOutput:
+            def __init__(self, input_ids):
+                self.input_ids = input_ids
+        
+        return TokenizerOutput(token_ids)
+    
     def decode(self, token_ids: List[int]) -> str:
         """Decode token ids back to text"""
         tokens = []
