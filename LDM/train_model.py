@@ -455,7 +455,7 @@ class SARTrainer:
         
         # Save regular checkpoint
         checkpoint_path = os.path.join(self.save_dir, f"sar_model_epoch_{self.current_epoch}.pt")
-        torch.save(checkpoint, checkpoint_path)
+        # torch.save(checkpoint, checkpoint_path)
         
         # Save best checkpoint
         if is_best:
