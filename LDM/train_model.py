@@ -71,9 +71,8 @@ class SARColorizationModel(nn.Module):
         self.vae_encoder = VAE_Encoder()
         
         # VAE Decoder (for decoding latents back to images)
-        self.vae_decoder = VAE_Decoder()
-          # U-Net for diffusion - now handles SAR+optical concatenated input (8 channels)
-        self.diffusion = Diffusion()
+        self.vae_decoder = VAE_Decoder()        # U-Net for diffusion - now handles SAR+optical concatenated input (8 channels)
+        self.diffusion = Diffusion(in_channels=8)
         
         # Input projection layer to match concatenated SAR+optical input (8 channels to 4 output)
         self.input_proj = nn.Conv2d(8, 4, kernel_size=1)

@@ -194,11 +194,11 @@ class SwitchSequential(nn.Sequential):
         return x
 
 class UNET(nn.Module):
-    def __init__(self):
+    def __init__(self, in_channels=4):
         super().__init__()
         self.encoders = nn.ModuleList([
-            # (Batch_Size, 4, Height / 8, Width / 8) -> (Batch_Size, 320, Height / 8, Width / 8)
-            SwitchSequential(nn.Conv2d(4, 320, kernel_size=3, padding=1)),
+            # (Batch_Size, in_channels, Height / 8, Width / 8) -> (Batch_Size, 320, Height / 8, Width / 8)
+            SwitchSequential(nn.Conv2d(in_channels, 320, kernel_size=3, padding=1)),
             
             # (Batch_Size, 320, Height / 8, Width / 8) -> # (Batch_Size, 320, Height / 8, Width / 8) -> (Batch_Size, 320, Height / 8, Width / 8)
             SwitchSequential(UNET_ResidualBlock(320, 320), UNET_AttentionBlock(8, 40)),
@@ -325,10 +325,10 @@ class UNET_OutputLayer(nn.Module):
         return x
 
 class Diffusion(nn.Module):
-    def __init__(self):
+    def __init__(self, in_channels=4):
         super().__init__()
         self.time_embedding = TimeEmbedding(320)
-        self.unet = UNET()
+        self.unet = UNET(in_channels=in_channels)
         self.final = UNET_OutputLayer(320, 4)
     
     def forward(self, latent, context, time):

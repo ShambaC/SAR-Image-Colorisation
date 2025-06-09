@@ -120,7 +120,7 @@ class SARInference:
         models["encoder"] = VAE_Encoder()
         models["decoder"] = VAE_Decoder()
           # Load Diffusion model
-        models["diffusion"] = Diffusion()  # Diffusion class takes no parameters
+        models["diffusion"] = Diffusion(in_channels=8)  # 8 channels for SAR+optical concatenation
         
         # Load main model checkpoint
         if os.path.exists(model_checkpoint_path):
