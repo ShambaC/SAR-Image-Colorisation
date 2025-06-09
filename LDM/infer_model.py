@@ -86,13 +86,12 @@ class SARInference:
                     "context_dim": 768
                 }
             }
-    
     def _load_tokenizer(self) -> SimpleTokenizer:
         """Load or create tokenizer"""
         tokenizer_path = Path(self.config.get("tokenizer_path", "tokenizer.json"))
         if tokenizer_path.exists():
             tokenizer = SimpleTokenizer()
-            tokenizer.load(str(tokenizer_path))
+            tokenizer.load_vocab(str(tokenizer_path))
         else:
             # Create default tokenizer
             tokenizer = SimpleTokenizer(vocab_size=1000, max_length=77)
@@ -120,10 +119,8 @@ class SARInference:
         # Load VAE Encoder/Decoder
         models["encoder"] = VAE_Encoder()
         models["decoder"] = VAE_Decoder()
-        
-        # Load Diffusion model
-        diffusion_config = self.config["diffusion_config"]
-        models["diffusion"] = Diffusion(**diffusion_config)
+          # Load Diffusion model
+        models["diffusion"] = Diffusion()  # Diffusion class takes no parameters
         
         # Load main model checkpoint
         if os.path.exists(model_checkpoint_path):
