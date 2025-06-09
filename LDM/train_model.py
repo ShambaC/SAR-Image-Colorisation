@@ -49,10 +49,9 @@ class SARColorizationModel(nn.Module):
         
         # U-Net for diffusion
         self.diffusion = Diffusion()
-        
-        # Input projection layer to match SAR input (from 3 to 4 channels for latent space)
+          # Input projection layer to match SAR input (from 3 to 4 channels for latent space)
         self.input_proj = nn.Conv2d(3, 4, kernel_size=1)
-        
+    
     def encode_text(self, prompts):
         """Encode text prompts using CLIP"""
         token_ids = self.tokenizer.encode_batch(prompts)
@@ -65,11 +64,19 @@ class SARColorizationModel(nn.Module):
         
         return text_embeddings
     
-    def encode_images(self, images):
+    def encode_images(self, images, noise=None):
         """Encode images to latent space"""
         # For now, use a simple projection since VAE_Encoder expects 3 channels
         # In practice, you might want to adapt this for SAR images
-        latents = self.vae_encoder(images)
+        
+        if noise is None:
+            # Create noise tensor with appropriate shape for latent space
+            # VAE encoder downsamples by factor of 8, outputs 4 channels
+            batch_size, _, height, width = images.shape
+            latent_height, latent_width = height // 8, width // 8
+            noise = torch.randn(batch_size, 4, latent_height, latent_width, device=images.device)
+        
+        latents = self.vae_encoder(images, noise)
         return latents
     
     def decode_latents(self, latents):
