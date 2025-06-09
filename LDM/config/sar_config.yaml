@@ -55,16 +55,16 @@ autoencoder_params:
 train_params:
   seed: 1111
   task_name: 'sar_colorization'
-  ldm_batch_size: 8  # Reduced for memory efficiency
-  autoencoder_batch_size: 4
+  ldm_batch_size: 16  # Reduced for memory efficiency
+  autoencoder_batch_size: 8
   disc_start: 15000
   disc_weight: 0.5
   codebook_weight: 1
   commitment_beta: 0.2
   perceptual_weight: 1
   kl_weight: 0.000005
-  ldm_epochs: 100
-  autoencoder_epochs: 30
+  ldm_epochs: 10
+  autoencoder_epochs: 4
   num_samples: 4
   num_grid_rows: 2
   ldm_lr: 0.000005

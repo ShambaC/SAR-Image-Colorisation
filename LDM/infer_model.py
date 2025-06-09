@@ -100,8 +100,7 @@ def sample_with_conditioning(ldm, scheduler, sar_image, text_prompt, text_tokeni
         'text': empty_text_embed,
         'image': torch.zeros_like(sar_image).to(device)
     }
-    
-    # Sampling loop
+      # Sampling loop
     for i in tqdm(reversed(range(diffusion_config['num_timesteps'])), desc="Sampling"):
         t = torch.full((1,), i, dtype=torch.long).to(device)
         
@@ -115,8 +114,9 @@ def sample_with_conditioning(ldm, scheduler, sar_image, text_prompt, text_tokeni
             # Apply classifier-free guidance
             noise_pred = noise_pred_uncond + guidance_scale * (noise_pred_cond - noise_pred_uncond)
             
-            # Denoise step
-            xt = scheduler.denoise_step(xt, noise_pred, t)
+            # Denoise step - use correct method name and handle return values
+            # Convert tensor timestep to scalar for scheduler
+            xt, x0 = scheduler.sample_prev_timestep(xt, noise_pred, i)
     
     return xt
 
