@@ -3,8 +3,8 @@ import numpy as np
 from tqdm import tqdm
 from ddpm import DDPMSampler
 
-WIDTH = 512
-HEIGHT = 512
+WIDTH = 256
+HEIGHT = 256
 LATENTS_WIDTH = WIDTH // 8
 LATENTS_HEIGHT = HEIGHT // 8
 
