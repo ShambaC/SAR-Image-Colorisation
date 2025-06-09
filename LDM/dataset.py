@@ -9,6 +9,34 @@ import glob
 import random
 
 
+def custom_collate_fn(batch: List[Dict]) -> Dict:
+    """
+    Custom collate function to handle mixed data types in batches.
+    
+    Args:
+        batch: List of data samples from the dataset
+        
+    Returns:
+        Dictionary with batched tensors and lists of strings
+    """
+    # Stack image tensors
+    s1_images = torch.stack([item['s1_image'] for item in batch])
+    s2_images = torch.stack([item['s2_image'] for item in batch])
+    
+    # Keep text prompts as list of strings
+    prompts = [item['prompt'] for item in batch]
+    
+    # Keep metadata as list of dictionaries
+    metadata = [item['metadata'] for item in batch]
+    
+    return {
+        's1_image': s1_images,
+        's2_image': s2_images,
+        'prompt': prompts,
+        'metadata': metadata
+    }
+
+
 class SARDataset(Dataset):
     """Dataset for SAR to Optical Image Translation with text prompts"""
     
@@ -177,7 +205,8 @@ def create_dataloaders(
         shuffle=True,
         num_workers=num_workers,
         pin_memory=pin_memory,
-        drop_last=True
+        drop_last=True,
+        collate_fn=custom_collate_fn  # Use custom collate function
     )
     
     test_loader = DataLoader(
@@ -186,7 +215,8 @@ def create_dataloaders(
         shuffle=False,
         num_workers=num_workers,
         pin_memory=pin_memory,
-        drop_last=False
+        drop_last=False,
+        collate_fn=custom_collate_fn  # Use custom collate function
     )
     
     return train_loader, test_loader
