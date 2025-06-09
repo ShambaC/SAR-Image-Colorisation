@@ -182,15 +182,14 @@ class SARInference:
         uncond_prompt = ""  # Empty prompt for classifier-free guidance
         
         print(f"Generating image with prompt: '{prompt}'")
-        
-        # Generate image using the pipeline
+          # Generate image using the pipeline
         generated_image = generate(
             prompt=prompt,
             uncond_prompt=uncond_prompt,
             input_image=sar_image,
             strength=strength,
             do_cfg=True,
-            cfg_scale=guidance_scale,
+            cfg_scale=guidance_scale,  # Note: using cfg_scale parameter name
             sampler_name="ddpm",
             n_inference_steps=num_inference_steps,
             models=self.models,
@@ -201,7 +200,6 @@ class SARInference:
           # Convert to numpy array and denormalize
         if isinstance(generated_image, torch.Tensor):
             generated_image = generated_image.cpu().numpy()
-        
         print(f"Generated image shape: {generated_image.shape}")
         print(f"Generated image dtype: {generated_image.dtype}")
         print(f"Generated image min/max: {generated_image.min():.3f}/{generated_image.max():.3f}")
@@ -216,6 +214,14 @@ class SARInference:
             generated_image = np.repeat(generated_image, 3, axis=-1)
             # Convert to CHW format for consistency
             generated_image = generated_image.transpose(2, 0, 1)
+        elif len(generated_image.shape) == 3:
+            # Check if it's in HWC format (height, width, channels)
+            if generated_image.shape[2] in [1, 3, 4] and generated_image.shape[2] < generated_image.shape[0]:
+                print(f"Detected HWC format: {generated_image.shape}")
+                # Convert from HWC to CHW
+                generated_image = generated_image.transpose(2, 0, 1)
+                print(f"Converted to CHW: {generated_image.shape}")
+            # If it's already in CHW format, keep as is
           # Ensure we have the correct shape: (C, H, W)
         if len(generated_image.shape) != 3:
             raise ValueError(f"Unexpected generated image shape: {generated_image.shape}. Expected (C, H, W)")
@@ -275,9 +281,16 @@ class SARInference:
                     generated_image = np.concatenate([repeated, extra], axis=0)
                 else:
                     generated_image = repeated
-        
-        # Convert from [-1, 1] to [0, 255]
+          # Convert from [-1, 1] to [0, 255]
         generated_image = ((generated_image + 1) * 127.5).clip(0, 255).astype(np.uint8)
+        
+        # Resize from 512x512 to 256x256 if needed (since pipeline generates 512x512)
+        if generated_image.shape[1] == 512 and generated_image.shape[2] == 512:
+            print("Resizing from 512x512 to 256x256...")
+            # Convert to PIL for resizing
+            temp_img = Image.fromarray(generated_image.transpose(1, 2, 0))
+            temp_img = temp_img.resize((256, 256), Image.LANCZOS)
+            generated_image = np.array(temp_img).transpose(2, 0, 1)
         
         print(f"Final image shape: {generated_image.shape}")
         
@@ -396,8 +409,18 @@ class SARInference:
                 uncond_prompt = ""
                 
                 print(f"Generating with prompt: '{prompt}'")
+                  # Generate image
+                # Map inference_kwargs to correct parameter names
+                generate_kwargs = {}
+                if 'guidance_scale' in inference_kwargs:
+                    generate_kwargs['cfg_scale'] = inference_kwargs['guidance_scale']
+                if 'num_inference_steps' in inference_kwargs:
+                    generate_kwargs['n_inference_steps'] = inference_kwargs['num_inference_steps']
+                if 'strength' in inference_kwargs:
+                    generate_kwargs['strength'] = inference_kwargs['strength']
+                if 'seed' in inference_kwargs:
+                    generate_kwargs['seed'] = inference_kwargs['seed']
                 
-                # Generate image
                 generated_image = generate(
                     prompt=prompt,
                     uncond_prompt=uncond_prompt,
@@ -405,9 +428,8 @@ class SARInference:
                     models=self.models,
                     device=self.device,
                     tokenizer=self.tokenizer,
-                    **inference_kwargs
-                )
-                  # Save generated image
+                    **generate_kwargs
+                )                # Save generated image
                 if isinstance(generated_image, torch.Tensor):
                     generated_image = generated_image.cpu().numpy()
                 
@@ -423,6 +445,14 @@ class SARInference:
                     generated_image = np.repeat(generated_image, 3, axis=-1)
                     # Convert to CHW format for consistency
                     generated_image = generated_image.transpose(2, 0, 1)
+                elif len(generated_image.shape) == 3:
+                    # Check if it's in HWC format (height, width, channels)
+                    if generated_image.shape[2] in [1, 3, 4] and generated_image.shape[2] < generated_image.shape[0]:
+                        print(f"Detected HWC format: {generated_image.shape}")
+                        # Convert from HWC to CHW
+                        generated_image = generated_image.transpose(2, 0, 1)
+                        print(f"Converted to CHW: {generated_image.shape}")
+                    # If it's already in CHW format, keep as is
                 
                 # Ensure we have the correct shape: (C, H, W)
                 if len(generated_image.shape) != 3:
@@ -444,9 +474,16 @@ class SARInference:
                 elif generated_image.shape[0] == 4:
                     # 4-channel: take first 3 channels
                     generated_image = generated_image[:3]
-                
-                # Convert from [-1, 1] to [0, 255]
+                  # Convert from [-1, 1] to [0, 255]
                 generated_image = ((generated_image + 1) * 127.5).clip(0, 255).astype(np.uint8)
+                
+                # Resize from 512x512 to 256x256 if needed (since pipeline generates 512x512)
+                if generated_image.shape[1] == 512 and generated_image.shape[2] == 512:
+                    print("Resizing from 512x512 to 256x256...")
+                    # Convert to PIL for resizing
+                    temp_img = Image.fromarray(generated_image.transpose(1, 2, 0))
+                    temp_img = temp_img.resize((256, 256), Image.LANCZOS)
+                    generated_image = np.array(temp_img).transpose(2, 0, 1)
                 
                 # Convert from CHW to HWC for PIL
                 output_image = Image.fromarray(generated_image.transpose(1, 2, 0))
