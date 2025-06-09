@@ -42,15 +42,22 @@ def train_clip_model(args):
     clip_cmd = [
         "python", "train_clip.py",
         "--dataset_path", args.dataset_path,
-        "--batch_size", str(args.clip_batch_size),
-        "--epochs", str(args.clip_epochs),
-        "--learning_rate", str(args.clip_lr),
         "--save_dir", args.clip_save_dir,
         "--log_dir", args.clip_log_dir
     ]
     
-    if args.clip_config:
+    # If config file exists, use only config file parameters
+    if args.clip_config and os.path.exists(args.clip_config):
         clip_cmd.extend(["--config_file", args.clip_config])
+        print(f"Using configuration from: {args.clip_config}")
+    else:
+        # Use command line parameters only if no config file
+        clip_cmd.extend([
+            "--batch_size", str(args.clip_batch_size),
+            "--epochs", str(args.clip_epochs),
+            "--learning_rate", str(args.clip_lr)
+        ])
+        print("Using command line parameters (no config file found)")
     
     print(f"Running: {' '.join(clip_cmd)}")
     
@@ -87,20 +94,25 @@ def train_main_model(args):
         "python", "train_model.py",
         "--dataset_path", args.dataset_path,
         "--clip_checkpoint", clip_checkpoint,
-        "--batch_size", str(args.model_batch_size),
-        "--epochs", str(args.model_epochs),
-        "--learning_rate", str(args.model_lr),
         "--save_dir", args.model_save_dir,
         "--log_dir", args.model_log_dir
     ]
     
-    if args.model_config:
-        main_cmd.extend(["--config_file", args.model_config])
-    
-    if args.mixed_precision:
-        main_cmd.append("--mixed_precision")
-    
-    main_cmd.extend(["--gradient_accumulation_steps", str(args.grad_accumulation)])
+    # If config file exists, use only config file parameters
+    if args.model_config and os.path.exists(args.model_config):
+        main_cmd.extend(["--config", args.model_config])
+        print(f"Using configuration from: {args.model_config}")
+    else:
+        # Use command line parameters only if no config file
+        main_cmd.extend([
+            "--batch_size", str(args.model_batch_size),
+            "--epochs", str(args.model_epochs),
+            "--learning_rate", str(args.model_lr),
+            "--gradient_accumulation_steps", str(args.grad_accumulation)
+        ])
+        if args.mixed_precision:
+            main_cmd.append("--mixed_precision")
+        print("Using command line parameters (no config file found)")
     
     print(f"Running: {' '.join(main_cmd)}")
     
