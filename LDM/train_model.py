@@ -9,6 +9,7 @@ import json
 from datetime import datetime
 from tqdm import tqdm
 import numpy as np
+import math
 from PIL import Image
 import torchvision.transforms as transforms
 
@@ -18,6 +19,31 @@ from clip import CLIP
 from encoder import VAE_Encoder
 from decoder import VAE_Decoder
 from diffusion import Diffusion
+
+
+def get_timestep_embedding(timesteps, embedding_dim):
+    """
+    Create sinusoidal timestep embeddings.
+    
+    Args:
+        timesteps: 1-D Tensor of N indices, one per batch element.
+        embedding_dim: The dimension of the output.
+        
+    Returns:
+        Tensor of shape (N, embedding_dim)
+    """
+    assert len(timesteps.shape) == 1, "Timesteps should be 1-D"
+    
+    half_dim = embedding_dim // 2
+    emb = math.log(10000) / (half_dim - 1)
+    emb = torch.exp(torch.arange(half_dim, dtype=torch.float32, device=timesteps.device) * -emb)
+    emb = timesteps.float()[:, None] * emb[None, :]
+    emb = torch.cat([torch.sin(emb), torch.cos(emb)], dim=1)
+    
+    if embedding_dim % 2 == 1:  # zero pad
+        emb = torch.cat([emb, torch.zeros(emb.shape[0], 1, device=emb.device)], dim=1)
+    
+    return emb
 
 
 class SARColorizationModel(nn.Module):
@@ -109,12 +135,14 @@ class SARColorizationModel(nn.Module):
         
         if timesteps is None:
             timesteps = torch.randint(0, 1000, (batch_size,), device=device)
-        
-        # Add noise to latents (this simulates the forward diffusion process)
+          # Add noise to latents (this simulates the forward diffusion process)
         noisy_latents = self._add_noise(sar_latents, noise, timesteps)
         
+        # Convert timesteps to embeddings for the diffusion model
+        timestep_embeddings = get_timestep_embedding(timesteps, 320)
+        
         # Predict noise using the diffusion model
-        predicted_noise = self.diffusion(noisy_latents, text_embeddings, timesteps)
+        predicted_noise = self.diffusion(noisy_latents, text_embeddings, timestep_embeddings)
         
         return predicted_noise, noise
     
@@ -141,13 +169,15 @@ class SARColorizationModel(nn.Module):
             
             # Start with pure noise
             latents = torch.randn_like(sar_latents)
-            
-            # Denoising loop (simplified)
+              # Denoising loop (simplified)
             for step in range(num_steps):
                 t = torch.full((batch_size,), step, device=device)
                 
+                # Convert timesteps to embeddings
+                t_embeddings = get_timestep_embedding(t, 320)
+                
                 # Predict noise
-                predicted_noise = self.diffusion(latents, text_embeddings, t)
+                predicted_noise = self.diffusion(latents, text_embeddings, t_embeddings)
                 
                 # Remove predicted noise (simplified denoising step)
                 alpha = 1.0 - (step / num_steps)
