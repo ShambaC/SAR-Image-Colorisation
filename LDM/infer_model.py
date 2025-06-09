@@ -198,16 +198,92 @@ class SARInference:
             device=self.device,
             tokenizer=self.tokenizer
         )
-        
-        # Convert to numpy array and denormalize
+          # Convert to numpy array and denormalize
         if isinstance(generated_image, torch.Tensor):
             generated_image = generated_image.cpu().numpy()
         
+        print(f"Generated image shape: {generated_image.shape}")
+        print(f"Generated image dtype: {generated_image.dtype}")
+        print(f"Generated image min/max: {generated_image.min():.3f}/{generated_image.max():.3f}")
+        
+        # Handle different possible output shapes
+        if len(generated_image.shape) == 4:
+            # Remove batch dimension if present: (1, C, H, W) -> (C, H, W)
+            generated_image = generated_image.squeeze(0)
+        elif len(generated_image.shape) == 2:
+            # Handle 2D output: (H, W) -> (H, W, 1) -> (H, W, 3)
+            generated_image = np.expand_dims(generated_image, axis=-1)
+            generated_image = np.repeat(generated_image, 3, axis=-1)
+            # Convert to CHW format for consistency
+            generated_image = generated_image.transpose(2, 0, 1)
+          # Ensure we have the correct shape: (C, H, W)
+        if len(generated_image.shape) != 3:
+            raise ValueError(f"Unexpected generated image shape: {generated_image.shape}. Expected (C, H, W)")
+        
+        # Handle unusual channel configurations and shapes
+        channels, height, width = generated_image.shape
+        
+        # If we have very unusual dimensions, try to reshape to a square image
+        if height == 1 or width == 1 or height * width < 64 * 64:
+            print(f"Warning: Unusual image dimensions {height}x{width}, attempting to reshape...")
+            
+            # Calculate total pixels across all channels
+            total_pixels = channels * height * width
+            
+            # Try to create a reasonable square image
+            if total_pixels >= 256 * 256:
+                side_length = int(np.sqrt(total_pixels // 3))
+                remaining_pixels = total_pixels - (3 * side_length * side_length)
+                
+                # If we can make a good square image with 3 channels
+                if remaining_pixels < side_length:  # Small remainder is acceptable
+                    flat_data = generated_image.flatten()[:3 * side_length * side_length]
+                    generated_image = flat_data.reshape(3, side_length, side_length)
+                    print(f"Reshaped to: {generated_image.shape}")
+                else:
+                    # Fall back to 256x256 if we have enough pixels
+                    flat_data = generated_image.flatten()
+                    if len(flat_data) >= 3 * 256 * 256:
+                        generated_image = flat_data[:3 * 256 * 256].reshape(3, 256, 256)
+                        print(f"Reshaped to default 256x256: {generated_image.shape}")
+                    else:
+                        print(f"Insufficient pixels for valid image: {total_pixels}")
+                        raise ValueError(f"Cannot create valid image from {generated_image.shape}")
+            else:
+                print(f"Insufficient pixels for valid image: {total_pixels}")
+                raise ValueError(f"Cannot create valid image from {generated_image.shape}")
+        
+        # Ensure correct number of channels
+        if generated_image.shape[0] == 1:
+            # Grayscale: (1, H, W) -> (3, H, W)
+            generated_image = np.repeat(generated_image, 3, axis=0)
+        elif generated_image.shape[0] == 4:
+            # 4-channel (RGBA or latent): take first 3 channels
+            generated_image = generated_image[:3]
+        elif generated_image.shape[0] != 3:
+            print(f"Warning: Unusual number of channels {generated_image.shape[0]}, attempting to fix...")
+            if generated_image.shape[0] > 3:
+                # Take first 3 channels
+                generated_image = generated_image[:3]
+            else:
+                # Repeat channels to get 3
+                channels_needed = 3 // generated_image.shape[0]
+                remainder = 3 % generated_image.shape[0]
+                repeated = np.repeat(generated_image, channels_needed, axis=0)
+                if remainder > 0:
+                    extra = generated_image[:remainder]
+                    generated_image = np.concatenate([repeated, extra], axis=0)
+                else:
+                    generated_image = repeated
+        
         # Convert from [-1, 1] to [0, 255]
-        generated_image = ((generated_image + 1) * 127.5).astype(np.uint8)
+        generated_image = ((generated_image + 1) * 127.5).clip(0, 255).astype(np.uint8)
+        
+        print(f"Final image shape: {generated_image.shape}")
         
         # Save output if path provided
         if output_path:
+            # Convert from CHW to HWC for PIL
             output_image = Image.fromarray(generated_image.transpose(1, 2, 0))
             output_image.save(output_path)
             print(f"Saved generated image to {output_path}")
@@ -331,12 +407,48 @@ class SARInference:
                     tokenizer=self.tokenizer,
                     **inference_kwargs
                 )
-                
-                # Save generated image
+                  # Save generated image
                 if isinstance(generated_image, torch.Tensor):
                     generated_image = generated_image.cpu().numpy()
                 
-                generated_image = ((generated_image + 1) * 127.5).astype(np.uint8)
+                print(f"Generated image shape: {generated_image.shape}")
+                
+                # Handle different possible output shapes
+                if len(generated_image.shape) == 4:
+                    # Remove batch dimension if present: (1, C, H, W) -> (C, H, W)
+                    generated_image = generated_image.squeeze(0)
+                elif len(generated_image.shape) == 2:
+                    # Handle 2D output: (H, W) -> (H, W, 1) -> (H, W, 3)
+                    generated_image = np.expand_dims(generated_image, axis=-1)
+                    generated_image = np.repeat(generated_image, 3, axis=-1)
+                    # Convert to CHW format for consistency
+                    generated_image = generated_image.transpose(2, 0, 1)
+                
+                # Ensure we have the correct shape: (C, H, W)
+                if len(generated_image.shape) != 3:
+                    print(f"Warning: Unexpected shape {generated_image.shape}, attempting to reshape...")
+                    # Try to reshape to a reasonable image shape
+                    total_elements = generated_image.size
+                    if total_elements >= 256 * 256:
+                        # Try to create a square image
+                        side_length = int(np.sqrt(total_elements // 3))
+                        generated_image = generated_image.reshape(3, side_length, side_length)
+                    else:
+                        print(f"Cannot create valid image from shape {generated_image.shape}")
+                        continue
+                
+                # Ensure correct number of channels
+                if generated_image.shape[0] == 1:
+                    # Grayscale: (1, H, W) -> (3, H, W)
+                    generated_image = np.repeat(generated_image, 3, axis=0)
+                elif generated_image.shape[0] == 4:
+                    # 4-channel: take first 3 channels
+                    generated_image = generated_image[:3]
+                
+                # Convert from [-1, 1] to [0, 255]
+                generated_image = ((generated_image + 1) * 127.5).clip(0, 255).astype(np.uint8)
+                
+                # Convert from CHW to HWC for PIL
                 output_image = Image.fromarray(generated_image.transpose(1, 2, 0))
                 output_image.save(output_path)
                 
