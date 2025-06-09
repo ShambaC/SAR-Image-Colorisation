@@ -1,0 +1,45 @@
+{
+    "clip_config": {
+        "n_vocab": 1000,
+        "n_embd": 768,
+        "max_length": 77,
+        "n_head": 12,
+        "n_layers": 12
+    },
+    "diffusion_config": {
+        "in_channels": 8,
+        "out_channels": 4,
+        "model_channels": 320,
+        "attention_resolutions": [4, 2, 1],
+        "num_res_blocks": 2,
+        "channel_mult": [1, 2, 4, 4],
+        "num_heads": 8,
+        "use_spatial_transformer": true,
+        "context_dim": 768
+    },
+    "training": {
+        "batch_size": 4,
+        "learning_rate": 1e-4,
+        "weight_decay": 0.01,
+        "epochs": 100,
+        "warmup_steps": 2000,
+        "save_every": 10,
+        "validate_every": 5,
+        "mixed_precision": true,
+        "gradient_accumulation_steps": 4,
+        "max_grad_norm": 1.0,
+        "optimizer": "adamw",
+        "scheduler": "cosine"
+    },
+    "data": {
+        "train_split": 0.8,
+        "num_workers": 4,
+        "pin_memory": true,
+        "seed": 42
+    },
+    "loss": {
+        "mse_loss_weight": 1.0,
+        "perceptual_loss_weight": 0.1,
+        "adversarial_loss_weight": 0.01
+    }
+}

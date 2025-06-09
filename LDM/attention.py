@@ -1,7 +1,7 @@
 import torch
+import math
 from torch import nn
 from torch.nn import functional as F
-import math
 
 class SelfAttention(nn.Module):
     def __init__(self, n_heads, d_embed, in_proj_bias=True, out_proj_bias=True):
@@ -100,10 +100,10 @@ class CrossAttention(nn.Module):
         # (Batch_Size, H, Seq_Len_Q, Dim_Q / H) @ (Batch_Size, H, Dim_Q / H, Seq_Len_KV) -> (Batch_Size, H, Seq_Len_Q, Seq_Len_KV)
         weight = q @ k.transpose(-1, -2)
         
-        # (Batch_Size, H, Seq_Len_Q, Seq_Len_KV)
+        # (Batch_Size, H, Seq_Len_Q, Seq_Len_KV) -> (Batch_Size, H, Seq_Len_Q, Seq_Len_KV)
         weight /= math.sqrt(self.d_head)
         
-        # (Batch_Size, H, Seq_Len_Q, Seq_Len_KV)
+        # (Batch_Size, H, Seq_Len_Q, Seq_Len_KV) -> (Batch_Size, H, Seq_Len_Q, Seq_Len_KV)
         weight = F.softmax(weight, dim=-1)
         
         # (Batch_Size, H, Seq_Len_Q, Seq_Len_KV) @ (Batch_Size, H, Seq_Len_KV, Dim_Q / H) -> (Batch_Size, H, Seq_Len_Q, Dim_Q / H)
