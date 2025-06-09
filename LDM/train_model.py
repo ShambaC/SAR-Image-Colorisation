@@ -72,11 +72,11 @@ class SARColorizationModel(nn.Module):
         
         # VAE Decoder (for decoding latents back to images)
         self.vae_decoder = VAE_Decoder()
-        
-        # U-Net for diffusion
+          # U-Net for diffusion - now handles SAR+optical concatenated input (8 channels)
         self.diffusion = Diffusion()
-          # Input projection layer to match SAR input (from 3 to 4 channels for latent space)
-        self.input_proj = nn.Conv2d(3, 4, kernel_size=1)
+        
+        # Input projection layer to match concatenated SAR+optical input (8 channels to 4 output)
+        self.input_proj = nn.Conv2d(8, 4, kernel_size=1)
     
     def encode_text(self, prompts):
         """Encode text prompts using CLIP"""
@@ -109,13 +109,13 @@ class SARColorizationModel(nn.Module):
         """Decode latents back to images"""
         images = self.vae_decoder(latents)
         return images
-    
-    def forward(self, sar_images, prompts, noise=None, timesteps=None):
+    def forward(self, sar_images, optical_images, prompts, noise=None, timesteps=None):
         """
-        Forward pass for training
+        Forward pass for training - learns to generate optical images from SAR images
         
         Args:
             sar_images: Input SAR images (B, 3, H, W)
+            optical_images: Target optical images (B, 3, H, W)
             prompts: Text prompts (list of strings)
             noise: Noise to add during training (B, 4, H//8, W//8)
             timesteps: Timesteps for diffusion (B,)
@@ -126,23 +126,31 @@ class SARColorizationModel(nn.Module):
         # Encode text prompts
         text_embeddings = self.encode_text(prompts)
         
-        # Encode SAR images to latent space
+        # Encode SAR images to latent space (condition)
         sar_latents = self.encode_images(sar_images)
         
-        # For training, we need to add noise and predict it
+        # Encode optical images to latent space (target)
+        optical_latents = self.encode_images(optical_images)
+        
+        # For training, we add noise to the target optical latents
         if noise is None:
-            noise = torch.randn_like(sar_latents)
+            noise = torch.randn_like(optical_latents)
         
         if timesteps is None:
             timesteps = torch.randint(0, 1000, (batch_size,), device=device)
-          # Add noise to latents (this simulates the forward diffusion process)
-        noisy_latents = self._add_noise(sar_latents, noise, timesteps)
+            
+        # Add noise to optical latents (this is what we want to denoise to)
+        noisy_optical_latents = self._add_noise(optical_latents, noise, timesteps)
+        
+        # Concatenate SAR latents with noisy optical latents as input to diffusion
+        # This allows the model to see both the condition (SAR) and noisy target
+        diffusion_input = torch.cat([sar_latents, noisy_optical_latents], dim=1)  # (B, 8, H//8, W//8)
         
         # Convert timesteps to embeddings for the diffusion model
         timestep_embeddings = get_timestep_embedding(timesteps, 320)
         
         # Predict noise using the diffusion model
-        predicted_noise = self.diffusion(noisy_latents, text_embeddings, timestep_embeddings)
+        predicted_noise = self.diffusion(diffusion_input, text_embeddings, timestep_embeddings)
         
         return predicted_noise, noise
     
@@ -152,7 +160,6 @@ class SARColorizationModel(nn.Module):
         alpha = 1.0 - (timesteps.float() / 1000.0).view(-1, 1, 1, 1)
         noisy_latents = alpha * latents + (1 - alpha) * noise
         return noisy_latents
-    
     def generate(self, sar_images, prompts, num_steps=50):
         """Generate colorized images from SAR images and prompts"""
         self.eval()
@@ -164,27 +171,31 @@ class SARColorizationModel(nn.Module):
             # Encode text prompts
             text_embeddings = self.encode_text(prompts)
             
-            # Encode SAR images
+            # Encode SAR images to latent space (this is our condition)
             sar_latents = self.encode_images(sar_images)
             
-            # Start with pure noise
-            latents = torch.randn_like(sar_latents)
-              # Denoising loop (simplified)
+            # Start with pure noise for the optical image generation
+            optical_latents = torch.randn_like(sar_latents)
+            
+            # Denoising loop
             for step in range(num_steps):
                 t = torch.full((batch_size,), step, device=device)
                 
                 # Convert timesteps to embeddings
                 t_embeddings = get_timestep_embedding(t, 320)
                 
+                # Concatenate SAR latents with current optical latents
+                diffusion_input = torch.cat([sar_latents, optical_latents], dim=1)
+                
                 # Predict noise
-                predicted_noise = self.diffusion(latents, text_embeddings, t_embeddings)
+                predicted_noise = self.diffusion(diffusion_input, text_embeddings, t_embeddings)
                 
                 # Remove predicted noise (simplified denoising step)
                 alpha = 1.0 - (step / num_steps)
-                latents = latents - alpha * predicted_noise
+                optical_latents = optical_latents - alpha * predicted_noise
             
-            # Decode latents to images
-            generated_images = self.decode_latents(latents)
+            # Decode optical latents to images
+            generated_images = self.decode_latents(optical_latents)
             
             return generated_images
 
@@ -224,9 +235,14 @@ class SARTrainer:
         # Setup optimizer and scheduler
         self.optimizer = self._setup_optimizer()
         self.scheduler = self._setup_scheduler()
+          # Setup loss functions
+        self.mse_loss = nn.MSELoss()
+        self.l1_loss = nn.L1Loss()
         
-        # Setup loss function
-        self.loss_fn = nn.MSELoss()
+        # Loss weights from config
+        loss_config = self.config.get("loss", {})
+        self.mse_weight = loss_config.get("mse_loss_weight", 1.0)
+        self.l1_weight = loss_config.get("l1_loss_weight", 0.1)
         
         # Setup tensorboard
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -345,14 +361,14 @@ class SARTrainer:
             sar_images = batch['s1_image'].to(self.device)
             optical_images = batch['s2_image'].to(self.device)
             prompts = batch['prompt']
-            
-            # Forward pass
+              # Forward pass
             self.optimizer.zero_grad()
+            predicted_noise, target_noise = self.model(sar_images, optical_images, prompts)
             
-            predicted_noise, target_noise = self.model(sar_images, prompts)
-            
-            # Compute loss
-            loss = self.loss_fn(predicted_noise, target_noise)
+            # Compute loss (combination of MSE and L1 for better training)
+            mse_loss = self.mse_loss(predicted_noise, target_noise)
+            l1_loss = self.l1_loss(predicted_noise, target_noise)
+            loss = self.mse_weight * mse_loss + self.l1_weight * l1_loss
             
             # Backward pass
             loss.backward()
@@ -405,11 +421,12 @@ class SARTrainer:
                 sar_images = batch['s1_image'].to(self.device)
                 optical_images = batch['s2_image'].to(self.device)
                 prompts = batch['prompt']
-                
-                # Forward pass
-                predicted_noise, target_noise = self.model(sar_images, prompts)
-                  # Compute loss
-                loss = self.loss_fn(predicted_noise, target_noise)
+                # Forward pass                
+                predicted_noise, target_noise = self.model(sar_images, optical_images, prompts)
+                # Compute loss (combination of MSE and L1 for better training)
+                mse_loss = self.mse_loss(predicted_noise, target_noise)
+                l1_loss = self.l1_loss(predicted_noise, target_noise)
+                loss = self.mse_weight * mse_loss + self.l1_weight * l1_loss
                 
                 total_loss += loss.item()
                 num_batches += 1
@@ -535,10 +552,10 @@ def get_default_config():
             "max_length": 77,
             "n_head": 12,
             "n_layers": 12
-        },
+        },        
         "diffusion_config": {
-            "in_channels": 8,
-            "out_channels": 4,
+            "in_channels": 8,  # 4 (SAR latents) + 4 (optical latents)
+            "out_channels": 4,  # Predicting noise in 4-channel latent space
             "model_channels": 320,
             "attention_resolutions": [4, 2, 1],
             "num_res_blocks": 2,
@@ -567,9 +584,9 @@ def get_default_config():
             "num_workers": 4,
             "pin_memory": True,
             "seed": 42
-        },
-        "loss": {
+        },        "loss": {
             "mse_loss_weight": 1.0,
+            "l1_loss_weight": 0.1,
             "perceptual_loss_weight": 0.1,
             "adversarial_loss_weight": 0.01
         }
