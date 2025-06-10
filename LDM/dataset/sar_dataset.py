@@ -36,7 +36,7 @@ class SARDataset(Dataset):
             metadata_file: Specific metadata CSV file to use (if None, loads from split-specific files)
             train_split: Proportion for training set
             val_split: Proportion for validation set  
-            test_split: Proportion for test set
+            test_split: Proportion for test set            
             random_seed: Random seed for reproducible splits
         """
         assert split in ['train', 'val', 'test'], f"Split must be 'train', 'val', or 'test', got {split}"
@@ -57,7 +57,8 @@ class SARDataset(Dataset):
         # Load dataset with proper splitting
         self.s1_images, self.s2_images, self.text_prompts = self.load_dataset_with_splits(
             im_path, metadata_file, train_split, val_split, test_split)
-          # Whether to load images or to load latents
+        
+        # Whether to load images or to load latents
         if use_latents and latent_path is not None:
             latent_maps = load_latents(latent_path)
             if len(latent_maps) == len(self.s2_images):
@@ -65,7 +66,8 @@ class SARDataset(Dataset):
                 self.latent_maps = latent_maps
                 print('Found {} latents'.format(len(self.latent_maps)))
             else:
-                print('Latents not found')
+                print('Latents not found, using direct image loading')
+                self.use_latents = False
     
     def load_dataset_with_splits(self, dataset_path, metadata_file, train_split, val_split, test_split):
         """

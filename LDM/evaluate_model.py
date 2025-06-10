@@ -237,8 +237,7 @@ def evaluate_model(config, num_samples=None, guidance_scale=7.5, save_samples=Tr
         beta_start=diffusion_config['beta_start'],
         beta_end=diffusion_config['beta_end']
     )
-    
-    # Load test dataset
+      # Load test dataset
     dataset_config = config['dataset_params']
     condition_config = config['ldm_params']['condition_config']
     
@@ -250,7 +249,8 @@ def evaluate_model(config, num_samples=None, guidance_scale=7.5, save_samples=Tr
         condition_config=condition_config,
         train_split=dataset_config['train_split'],
         val_split=dataset_config['val_split'],
-        test_split=dataset_config['test_split']
+        test_split=dataset_config['test_split'],
+        use_latents=False  # Disable latents for evaluation - we need original images
     )
     
     print(f"Test dataset loaded: {len(test_dataset)} samples")
