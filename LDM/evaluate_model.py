@@ -297,11 +297,12 @@ def evaluate_model(config, num_samples=None, guidance_scale=7.5, save_samples=Tr
             if isinstance(data, tuple):
                 ground_truth, cond_inputs = data
                 
-                # Handle text prompt (might be a list from DataLoader batching)
+                # Handle text prompt - should be a string now (not list)
                 if 'text' in cond_inputs:
                     text_prompt = cond_inputs['text']
+                    # If it's somehow still a list, take the first element
                     if isinstance(text_prompt, list):
-                        text_prompt = text_prompt[0]  # Take first item from batch
+                        text_prompt = text_prompt[0]
                 else:
                     text_prompt = "Colorise image"
                 
@@ -317,7 +318,7 @@ def evaluate_model(config, num_samples=None, guidance_scale=7.5, save_samples=Tr
                 print(f"Warning: No SAR image for sample {i}, skipping...")
                 continue
             
-            # Handle case where sar_image might be a list (from DataLoader batching)
+            # Handle case where sar_image might be a list (shouldn't happen with fixed collate function)
             if isinstance(sar_image, list):
                 sar_image = sar_image[0]  # Take first (and only) item from batch
             
@@ -509,35 +510,59 @@ def create_metric_plots(results, results_dir):
 
 def custom_collate_fn(batch):
     """Custom collate function to handle SAR dataset batching"""
+    # Handle single sample case (batch_size=1)
     if len(batch) == 1:
-        # Single sample case
         sample = batch[0]
         if isinstance(sample, tuple):
             # (target_image, cond_inputs) format
             target, cond_inputs = sample
             
-            # Convert target to batch format
+            # Convert target to batch format (add batch dimension)
             target_batch = target.unsqueeze(0)
             
-            # Handle conditioning inputs
+            # Handle conditioning inputs - don't add batch dimension since we're working with single samples
             cond_batch = {}
             for key, value in cond_inputs.items():
                 if key == 'text':
-                    # Text should remain as list for batch
-                    cond_batch[key] = [value] if isinstance(value, str) else value
+                    # Keep text as string (not list)
+                    cond_batch[key] = value
                 elif key == 'image':
-                    # Image should be batched
-                    cond_batch[key] = value.unsqueeze(0) if isinstance(value, torch.Tensor) else value
+                    # Keep image tensor as is (don't add batch dimension for single sample)
+                    cond_batch[key] = value
                 else:
                     cond_batch[key] = value
             
             return target_batch, cond_batch
         else:
-            # Just target image
+            # Just target image - add batch dimension
             return sample.unsqueeze(0)
     else:
-        # Multiple samples - use default collation
-        return torch.utils.data.dataloader.default_collate(batch)
+        # Multiple samples - use default collation with proper handling
+        targets = []
+        text_prompts = []
+        images = []
+        
+        for sample in batch:
+            if isinstance(sample, tuple):
+                target, cond_inputs = sample
+                targets.append(target)
+                text_prompts.append(cond_inputs.get('text', ''))
+                images.append(cond_inputs.get('image'))
+            else:
+                targets.append(sample)
+                text_prompts.append('')
+                images.append(None)
+        
+        # Stack targets
+        target_batch = torch.stack(targets, dim=0)
+        
+        # Create conditioning batch
+        cond_batch = {
+            'text': text_prompts,
+            'image': torch.stack([img for img in images if img is not None], dim=0) if any(img is not None for img in images) else None
+        }
+        
+        return target_batch, cond_batch
 
 
 def main():
