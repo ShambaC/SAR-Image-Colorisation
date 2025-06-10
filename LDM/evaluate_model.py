@@ -360,8 +360,13 @@ def evaluate_model(config, num_samples=None, guidance_scale=7.5, save_samples=Tr
             lpips_val = metrics_calculator.lpips(generated_image, ground_truth_norm)
             mse_val = metrics_calculator.mse(generated_image, ground_truth_norm)
             mae_val = metrics_calculator.mae(generated_image, ground_truth_norm)
+              # Store results (convert to Python types)
+            psnr_val = float(psnr_val) if psnr_val is not None else None
+            ssim_val = float(ssim_val) if ssim_val is not None else None
+            lpips_val = float(lpips_val) if lpips_val is not None else None
+            mse_val = float(mse_val) if mse_val is not None else None
+            mae_val = float(mae_val) if mae_val is not None else None
             
-            # Store results
             results['psnr'].append(psnr_val)
             results['ssim'].append(ssim_val)
             if lpips_val is not None:
@@ -399,6 +404,22 @@ def evaluate_model(config, num_samples=None, guidance_scale=7.5, save_samples=Tr
     return results, results_dir
 
 
+def convert_numpy_types(obj):
+    """Convert NumPy types to native Python types for JSON serialization"""
+    if isinstance(obj, dict):
+        return {key: convert_numpy_types(value) for key, value in obj.items()}
+    elif isinstance(obj, list):
+        return [convert_numpy_types(item) for item in obj]
+    elif isinstance(obj, np.integer):
+        return int(obj)
+    elif isinstance(obj, np.floating):
+        return float(obj)
+    elif isinstance(obj, np.ndarray):
+        return obj.tolist()
+    else:
+        return obj
+
+
 def generate_report(results, results_dir, config):
     """Generate comprehensive evaluation report"""
     
@@ -430,7 +451,7 @@ def generate_report(results, results_dir, config):
     # Save JSON report
     report_path = os.path.join(results_dir, 'evaluation_report.json')
     with open(report_path, 'w') as f:
-        json.dump(report, f, indent=2)
+        json.dump(convert_numpy_types(report), f, indent=2)
     
     # Create plots
     create_metric_plots(results, results_dir)
