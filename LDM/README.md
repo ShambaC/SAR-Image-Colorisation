@@ -1,311 +1,504 @@
-Stable Diffusion Implementation in PyTorch
-========
+# SAR to Optical Image Translation
 
-This repository implements Stable Diffusion.
-As of today the repo provides code to do the following:
-* Training and Inference on Unconditional Latent Diffusion Models
-* Training a Class Conditional Latent Diffusion Model
-* Training a Text Conditioned Latent Diffusion Model
-* Training a Semantic Mask Conditioned Latent Diffusion Model
-* Any Combination of the above three conditioning
+This guide provides comprehensive instructions for training and using the SAR to Optical image translation model using text-guided latent diffusion.
 
-For autoencoder I provide code for vae as well as vqvae.
-But both the stages of training use VQVAE only. One can easily change that to vae if needed
+## Table of Contents
+1. [Setup and Installation](#setup-and-installation)
+2. [Dataset Preparation](#dataset-preparation)
+3. [Configuration](#configuration)
+4. [Training](#training)
+5. [Inference](#inference)
+6. [Hyperparameter Tuning](#hyperparameter-tuning)
+7. [Troubleshooting](#troubleshooting)
 
-For diffusion part, as of now it only implements DDPM with linear schedule.
+## Setup and Installation
 
+### Prerequisites
+- Python 3.9+
+- CUDA-capable GPU (recommended)
+- At least 16GB RAM
+- 50GB+ free disk space
 
-## Stable Diffusion Tutorial Videos
-<a href="https://www.youtube.com/watch?v=1BkzNb3ejK4">
-   <img alt="Stable Diffusion Tutorial" src="https://github.com/explainingai-code/StableDiffusion-PyTorch/assets/144267687/7a24d114-38bd-43a8-9819-3afa112f39ab"
-   width="400">
-</a>
-<a href="https://www.youtube.com/watch?v=hEJjg7VUA8g">
-   <img alt="Stable Diffusion Conditioning Tutorial" src="https://github.com/explainingai-code/StableDiffusion-PyTorch/assets/144267687/0b03cae4-4009-4bd7-8b02-328b0c5f33a3"
-   width="400">
-</a>
-___  
+### Dependencies Installation
+```bash
+# Install required packages
+pip install -r requirements.txt
 
-
-## Sample Output for Autoencoder on CelebHQ
-Image - Top, Reconstructions - Below
-
-<img src="https://github.com/explainingai-code/StableDiffusion-PyTorch/assets/144267687/2260d618-046e-411c-bea5-0c4cb7438560" width="300">
-
-## Sample Output for Unconditional LDM on CelebHQ (not fully converged)
-
-<img src="https://github.com/explainingai-code/StableDiffusion-PyTorch/assets/144267687/212cd84a-9bd1-43f0-93b4-3b8ff9866571" width="300">
-
-## Sample Output for Conditional LDM
-### Sample Output for Class Conditioned on MNIST
-![50](https://github.com/explainingai-code/StableDiffusion-PyTorch/assets/144267687/46a38d36-3770-4f40-895a-95a16dc6462a)
-![50](https://github.com/explainingai-code/StableDiffusion-PyTorch/assets/144267687/1562c41d-e6ff-41cf-8d1e-6909a4240a04)
-![50](https://github.com/explainingai-code/StableDiffusion-PyTorch/assets/144267687/0cde44a6-746b-4f05-9422-9604f9436d91)
-![50](https://github.com/explainingai-code/StableDiffusion-PyTorch/assets/144267687/7d6b8db2-dab4-4a17-9fe6-570d938669f6)
-![50](https://github.com/explainingai-code/StableDiffusion-PyTorch/assets/144267687/6ecc3c61-3668-4305-aa4a-0f0e3cf815a0)
-
-### Sample Output for Text(using CLIP) and Mask Conditioned on CelebHQ (not converged)
-<img src="https://github.com/explainingai-code/StableDiffusion-PyTorch/assets/144267687/78aa92bb-655e-46f6-92e9-a0c59787d700" width="100">
-</br>
-<img src="https://github.com/explainingai-code/StableDiffusion-PyTorch/assets/144267687/9fcf66fb-65d7-4c2c-9fc4-9bbe428de11f" width="100">
-Text -  She is a woman with blond hair
-</br>
-<img src="https://github.com/explainingai-code/StableDiffusion-PyTorch/assets/144267687/44ad67c8-c1e1-4ade-936f-18da92202e55" width="100">
-Text -  She is a woman with black hair
-
-___
-
-## Setup
-* Create a new conda environment with python 3.8 then run below commands
-* `conda activate <environment_name>`
-* ```git clone https://github.com/explainingai-code/StableDiffusion-PyTorch.git```
-* ```cd StableDiffusion-PyTorch```
-* ```pip install -r requirements.txt```
-*  Download lpips weights by opening this link in browser(dont use cURL or wget) https://github.com/richzhang/PerceptualSimilarity/blob/master/lpips/weights/v0.1/vgg.pth and downloading the raw file. Place the downloaded weights file in ```models/weights/v0.1/vgg.pth```
-
-___  
-
-## Data Preparation
-### Mnist
-
-For setting up the mnist dataset follow - https://github.com/explainingai-code/Pytorch-VAE#data-preparation
-
-Ensure directory structure is following
-```
-StableDiffusion-PyTorch
-    -> data
-        -> mnist
-            -> train
-                -> images
-                    -> *.png
-            -> test
-                -> images
-                    -> *.png
+# Verify installation
+python test_setup.py
 ```
 
-### CelebHQ 
-#### Unconditional
-For setting up on CelebHQ for unconditional, simply download the images from the official repo of CelebMASK HQ [here](https://github.com/switchablenorms/CelebAMask-HQ?tab=readme-ov-file).
+## Dataset Preparation
 
-Ensure directory structure is the following
+### Dataset Structure
+Ensure your dataset follows this structure:
 ```
-StableDiffusion-PyTorch
-    -> data
-        -> CelebAMask-HQ
-            -> CelebA-HQ-img
-                -> *.jpg
+Dataset/
+├── r_000/
+│   ├── s1_000/
+│   │   └── img_p0.png, img_p1.png, ...
+│   └── s2_000/
+│       └── img_p0.png, img_p1.png, ...
+├── r_001/
+│   ├── s1_001/
+│   └── s2_001/
+├── data_r_000.csv
+├── data_r_001.csv
+└── ...
+```
 
-```
-#### Mask Conditional
-For CelebHQ for mask conditional LDM additionally do the following:
+### CSV File Format
+Each `data_r_XXX.csv` should contain:
+- `s1_fileName`: Path to SAR image relative to Dataset folder
+- `s2_fileName`: Path to optical image relative to Dataset folder
+- `region`: Geographic region description
+- `season`: Seasonal information
+- Other metadata columns (optional)
 
-Ensure directory structure is the following
+### Train/Validation/Test Splits
+
+The dataset automatically handles proper train/validation/test splits with the following features:
+
+#### Automatic Splitting
+- **Default ratios**: 70% train, 15% validation, 15% test
+- **Reproducible**: Uses fixed random seed for consistent splits across runs
+- **No data leakage**: Ensures complete separation between splits
+- **Stratified by source**: Maintains region/season distribution across splits
+
+#### Split Configuration
+Configure splits in `config/sar_config.yaml`:
+```yaml
+dataset_params:
+  train_split: 0.7    # 70% for training
+  val_split: 0.15     # 15% for validation  
+  test_split: 0.15    # 15% for testing
 ```
-StableDiffusion-PyTorch
-    -> data
-        -> CelebAMask-HQ
-            -> CelebA-HQ-img
-                -> *.jpg
-            -> CelebAMask-HQ-mask-anno
-                -> 0/1/2/3.../14
-                    -> *.png
+
+#### Split Methods
+The system supports three split methods:
+
+1. **Auto-split from all data** (recommended):
+   - Place all CSV files in Dataset folder
+   - System automatically creates reproducible splits
+
+2. **Pre-split files**:
+   - Create `train_metadata.csv`, `val_metadata.csv`, `test_metadata.csv`
+   - System will use these directly
+
+3. **Single file splitting**:
+   - Use single CSV file, specify with `metadata_file` parameter
+   - System splits it according to ratios
+
+### Data Validation
+
+#### Validate Dataset Structure
+Run this script to validate your dataset:
+```python
+import os
+import pandas as pd
+import glob
+
+def validate_dataset(dataset_path):
+    csv_files = glob.glob(os.path.join(dataset_path, 'data_r_*.csv'))
+    total_pairs = 0
+    missing_files = 0
+    
+    for csv_file in csv_files:
+        df = pd.read_csv(csv_file)
+        for _, row in df.iterrows():
+            s1_path = os.path.join(dataset_path, row['s1_fileName'])
+            s2_path = os.path.join(dataset_path, row['s2_fileName'])
             
+            if not os.path.exists(s1_path) or not os.path.exists(s2_path):
+                missing_files += 1
+                print(f"Missing: {s1_path} or {s2_path}")
+            total_pairs += 1
+    
+    print(f"Total pairs: {total_pairs}")
+    print(f"Missing files: {missing_files}")
+    print(f"Valid pairs: {total_pairs - missing_files}")
+
+# Run validation
+validate_dataset("../Dataset")
 ```
 
-* Run `python -m utils.create_celeb_mask` from repo root to create the mask images from mask annotations
-
-Ensure directory structure is the following
-```
-StableDiffusion-PyTorch
-    -> data
-        -> CelebAMask-HQ
-            -> CelebA-HQ-img
-                -> *.jpg
-            -> CelebAMask-HQ-mask-anno
-                -> 0/1/2/3.../14
-                    -> *.png
-            -> CelebAMask-HQ-mask
-                  -> *.png
+#### Validate Train/Test Splits
+Test your data splitting setup:
+```bash
+python validate_splits.py
 ```
 
-#### Text Conditional
-For CelebHQ for text conditional LDM additionally do the following:
-* The repo uses captions collected as part of this repo - https://github.com/IIGROUP/MM-CelebA-HQ-Dataset?tab=readme-ov-file 
-* Download the captions from the `text` link provided in the repo - https://github.com/IIGROUP/MM-CelebA-HQ-Dataset?tab=readme-ov-file#overview
-* This will download a `celeba-captions` folder, simply move this inside the `data/CelebAMask-HQ` folder as that is where the dataset class expects it to be.
+This script will:
+- Verify split proportions are correct
+- Check for data leakage between splits
+- Test reproducibility of splits
+- Analyze data distribution across splits
 
-Ensure directory structure is the following
-```
-StableDiffusion-PyTorch
-    -> data
-        -> CelebAMask-HQ
-            -> CelebA-HQ-img
-                -> *.jpg
-            -> CelebAMask-HQ-mask-anno
-                -> 0/1/2/3.../14
-                    -> *.png
-            -> CelebAMask-HQ-mask
-                -> *.png
-            -> celeba-caption
-                -> *.txt
-```
----
 ## Configuration
- Allows you to play with different components of ddpm and autoencoder training
-* ```config/mnist.yaml``` - Small autoencoder and ldm can even be trained on CPU
-* ```config/celebhq.yaml``` - Configuration used for celebhq dataset
 
-Relevant configuration parameters
+### Main Configuration File: `config/sar_config.yaml`
 
-Most parameters are self explanatory but below I mention couple which are specific to this repo.
-* ```autoencoder_acc_steps``` : For accumulating gradients if image size is too large for larger batch sizes
-* ```save_latents``` : Enable this to save the latents , during inference of autoencoder. That way ddpm training will be faster
+#### Dataset Parameters
+```yaml
+dataset_params:
+  im_path: '../Dataset'  # Path to your dataset
+  im_channels: 3         # RGB channels
+  im_size: 256          # Image resolution
+  name: 'sar'           # Dataset identifier
+```
 
-___  
+#### Model Architecture
+```yaml
+autoencoder_params:
+  z_channels: 4               # Latent space channels
+  codebook_size: 8192        # VQ codebook size
+  down_channels: [64, 128, 256, 256]  # Encoder channels
+  # ... other parameters
+```
+
+#### Training Parameters
+```yaml
+train_params:
+  ldm_batch_size: 64          # Batch size for diffusion training
+  autoencoder_batch_size: 4  # Batch size for autoencoder training
+  ldm_epochs: 60           # Number of diffusion training epochs
+  autoencoder_epochs: 25    # Number of autoencoder training epochs
+  ldm_lr: 1e-4         # Learning rate for diffusion model
+  autoencoder_lr: 0.00001  # Learning rate for autoencoder
+  cf_guidance_scale: 7.5   # Classifier-free guidance scale
+  # ... other parameters
+```
+
 ## Training
-The repo provides training and inference for Mnist(Unconditional and Class Conditional) and CelebHQ (Unconditional, Text and/or Mask Conditional).
 
-For working on your own dataset:
-* Create your own config and have the path in config point to images (look at `celebhq.yaml` for guidance)
-* Create your own dataset class which will just collect all the filenames and return the image in its getitem method. Look at `mnist_dataset.py` or `celeb_dataset.py` for guidance 
+### Stage 1: Train Autoencoder (VQVAE)
 
-Once the config and dataset is setup:
-* Train the auto encoder on your dataset using [this section](#training-autoencoder-for-ldm)
-* For training Unconditional LDM follow [this section](#training-unconditional-ldm)
-* For class conditional ldm go through [this section](#training-class-conditional-ldm)
-* For text conditional ldm go through [this section](#training-text-conditional-ldm)
-* For text and mask conditional ldm go through [this section](#training-text-and-mask-conditional-ldm)
+Train the autoencoder on optical images:
+```bash
+python train_model.py --config config/sar_config.yaml --stage autoencoder
+```
 
+**Key points:**
+- Trains only on Sentinel-2 (optical) images
+- Creates a compressed latent representation
+- Typically takes 2-4 hours on modern GPUs
+- Saves checkpoints in `sar_colorization/` folder
 
-## Training AutoEncoder for LDM
-* For training autoencoder on mnist,ensure the right path is mentioned in `mnist.yaml`
-* For training autoencoder on celebhq,ensure the right path is mentioned in `celebhq.yaml`
-* For training autoencoder on your own dataset 
-  * Create your own config and have the path point to images (look at celebhq.yaml for guidance)
-  * Create your own dataset class, similar to celeb_dataset.py without conditining parts
-* Map the dataset name to the right class in the training code [here](https://github.com/explainingai-code/StableDiffusion-PyTorch/blob/main/tools/train_ddpm_vqvae.py#L40)
-* For training autoencoder run ```python -m tools.train_vqvae --config config/mnist.yaml``` for training vqvae with the desire config file
-* For inference using trained autoencoder run```python -m tools.infer_vqvae --config config/mnist.yaml``` for generating reconstructions with right config file. Use save_latent in config to save the latent files 
+### Stage 2: Train Latent Diffusion Model
 
+Train the diffusion model with conditioning:
+```bash
+python train_model.py --config config/sar_config.yaml --stage ldm
+```
 
-## Training Unconditional LDM
-Train the autoencoder first and setup dataset accordingly.
+**Key points:**
+- Uses SAR images + text prompts as conditioning
+- Generates optical images in latent space
+- Takes 8-12 hours depending on dataset size
+- Requires completed autoencoder training
 
-For training unconditional LDM map the dataset to the right class in `train_ddpm_vqvae.py`
-* ```python -m tools.train_ddpm_vqvae --config config/mnist.yaml``` for training unconditional ddpm using right config
-* ```python -m tools.sample_ddpm_vqvae --config config/mnist.yaml``` for generating images using trained ddpm
+### Combined Training
+Train both stages sequentially:
+```bash
+python train_model.py --config config/sar_config.yaml --stage both
+```
 
-## Training Conditional LDM
-For training conditional models we need two changes:
-* Dataset classes must provide the additional conditional inputs(see below)
-* Config must be changed with additional conditioning config added
+### Monitoring Training
 
-Specifically the dataset `getitem` will return the following:
-* `image_tensor` for unconditional training
-* tuple of `(image_tensor,  cond_input )` for conditional training where cond_input is a dictionary consisting of keys ```{class/text/image}```
+1. **Check loss curves:** Training progress is printed to console
+2. **Sample images:** Autoencoder samples saved in `sar_colorization/autoencoder_samples/`
+3. **Checkpoints:** Model weights saved in `sar_colorization/`
 
-### Training Class Conditional LDM
-The repo provides class conditional latent diffusion model training code for mnist dataset, so one
-can use that to follow the same for their own dataset
+## Inference
 
-* Use `mnist_class_cond.yaml` config file as a guide to create your class conditional config file.
-Specifically following new keys need to be modified according to your dataset within `ldm_params`.
-* ```  
+### Interactive Mode (Recommended for testing)
+```bash
+python infer_model.py --config config/sar_config.yaml --mode interactive
+```
+
+### Single Image
+```bash
+python infer_model.py \
+  --config config/sar_config.yaml \
+  --mode single \
+  --sar_image path/to/sar_image.png \
+  --region "urban" \
+  --season "summer" \
+  --output colorized_result.png
+```
+
+### Batch Processing
+```bash
+python infer_model.py \
+  --config config/sar_config.yaml \
+  --mode batch \
+  --sar_folder path/to/sar_images/ \
+  --output results_folder/ \
+  --region "forest" \
+  --season "autumn"
+```
+
+### Custom Text Prompts
+```bash
+python infer_model.py \
+  --config config/sar_config.yaml \
+  --mode single \
+  --sar_image image.png \
+  --text_prompt "Colorise image, Region: urban, Season: winter"
+```
+
+## Model evaluation
+
+**Metrics Computed**:
+- PSNR (Peak Signal-to-Noise Ratio)
+- SSIM (Structural Similarity Index)
+- LPIPS (Learned Perceptual Image Patch Similarity) - if available
+- MSE (Mean Squared Error)
+- MAE (Mean Absolute Error)
+
+**Usage**:
+```bash
+# Full evaluation with default settings
+python evaluate_model.py --config config/sar_config.yaml
+
+# Evaluate specific number of samples with custom guidance scale
+python evaluate_model.py --config config/sar_config.yaml --num_samples 50 --guidance_scale 7.5
+
+# Skip saving sample images to save disk space
+python evaluate_model.py --config config/sar_config.yaml --no_save_samples
+```
+
+**Output**: Results saved in `sar_colorization/evaluation_results/`
+
+## Hyperparameter Tuning
+
+### Memory Optimization
+
+**For Limited GPU Memory (< 8GB):**
+```yaml
+train_params:
+  ldm_batch_size: 4          # Reduce batch size
+  autoencoder_batch_size: 2
+  autoencoder_acc_steps: 8   # Increase gradient accumulation
+```
+
+**For High-End GPUs (> 16GB):**
+```yaml
+train_params:
+  ldm_batch_size: 16
+  autoencoder_batch_size: 8
+  autoencoder_acc_steps: 2
+```
+
+### Training Speed vs Quality
+
+**Fast Training (Lower Quality):**
+```yaml
+train_params:
+  ldm_epochs: 50
+  autoencoder_epochs: 15
+  im_size: 128               # Smaller images
+diffusion_params:
+  num_timesteps: 500         # Fewer diffusion steps
+```
+
+**High Quality (Slower Training):**
+```yaml
+train_params:
+  ldm_epochs: 200
+  autoencoder_epochs: 50
+  im_size: 512               # Higher resolution
+diffusion_params:
+  num_timesteps: 1000
+```
+
+### Conditioning Strength
+
+**Stronger Text Conditioning:**
+```yaml
+ldm_params:
   condition_config:
-    condition_types: ['class']
-    class_condition_config :
-      num_classes : <number of classes: 10 for mnist>
-      cond_drop_prob : <probability of dropping class labels>
-  ```
-* Create a dataset class similar to mnist where the getitem method now returns a tuple of image_tensor and dictionary of conditional_inputs.
-* For class, conditional input will ONLY be the integer class
-* ```
-    (image_tensor, {
-                    'class' : {0/1/.../num_classes}
-                    })
+    text_condition_config:
+      cond_drop_prob: 0.05   # Lower dropout = stronger conditioning
+```
 
-For training class conditional LDM map the dataset to the right class in `train_ddpm_cond` and run the below commands using desired config
-* ```python -m tools.train_ddpm_cond --config config/mnist_class_cond.yaml``` for training class conditional on mnist 
-* ```python -m tools.sample_ddpm_class_cond --config config/mnist.yaml``` for generating images using class conditional trained ddpm
+**Stronger Image Conditioning:**
+```yaml
+ldm_params:
+  condition_config:
+    image_condition_config:
+      cond_drop_prob: 0.02
+```
 
-### Training Text Conditional LDM
-The repo provides text conditional latent diffusion model training code for celebhq dataset, so one
-can use that to follow the same for their own dataset
+### Guidance Scale Tuning
 
-* Use `celebhq_text_cond.yaml` config file as a guide to create your config file.
-Specifically following new keys need to be modified according to your dataset within `ldm_params`.
-* ```  
-    condition_config:
-        condition_types: [ 'text' ]
-        text_condition_config:
-            text_embed_model: 'clip' or 'bert'
-            text_embed_dim: 512 or 768
-            cond_drop_prob: 0.1
-  ```
-* Create a dataset class similar to celebhq where the getitem method now returns a tuple of image_tensor and dictionary of conditional_inputs.
-* For text, conditional input will ONLY be the caption
-* ```
-    (image_tensor, {
-                    'text' : 'a sample caption for image_tensor'
-                    })
+- **Low guidance (2-5):** More diverse, less controlled outputs
+- **Medium guidance (5-10):** Balanced quality and diversity  
+- **High guidance (10-15):** More controlled but potentially less diverse
 
-For training text conditional LDM map the dataset to the right class in `train_ddpm_cond` and run the below commands using desired config
-* ```python -m tools.train_ddpm_cond --config config/celebhq_text_cond.yaml``` for training text conditioned ldm on celebhq 
-* ```python -m tools.sample_ddpm_text_cond --config config/celebhq_text_cond.yaml``` for generating images using text conditional trained ddpm
+## Troubleshooting
 
-### Training Text and Mask Conditional LDM
-The repo provides text and mask conditional latent diffusion model training code for celebhq dataset, so one
-can use that to follow the same for their own dataset and can even use that train a mask only conditional ldm
+### Common Issues
 
-* Use `celebhq_text_image_cond.yaml` config file as a guide to create your config file.
-Specifically following new keys need to be modified according to your dataset within `ldm_params`.
-* ```  
-    condition_config:
-        condition_types: [ 'text', 'image' ]
-        text_condition_config:
-            text_embed_model: 'clip' or 'bert
-            text_embed_dim: 512 or 768
-            cond_drop_prob: 0.1
-        image_condition_config:
-           image_condition_input_channels: 18
-           image_condition_output_channels: 3
-           image_condition_h : 512 
-           image_condition_w : 512
-           cond_drop_prob: 0.1
-  ```
-* Create a dataset class similar to celebhq where the getitem method now returns a tuple of image_tensor and dictionary of conditional_inputs.
-* For text and mask, conditional input will be caption and mask image
-* ```
-    (image_tensor, {
-                    'text' : 'a sample caption for image_tensor',
-                    'image' : NUM_CLASSES x MASK_H x MASK_W
-                    })
+**1. CUDA Out of Memory**
+```
+Solution: Reduce batch sizes in config file
+train_params:
+  ldm_batch_size: 4
+  autoencoder_batch_size: 2
+```
 
-For training text unconditional LDM map the dataset to the right class in `train_ddpm_cond` and run the below commands using desired config
-* ```python -m tools.train_ddpm_cond --config config/celebhq_text_image_cond.yaml``` for training text and mask conditioned ldm on celebhq 
-* ```python -m tools.sample_ddpm_text_image_cond --config config/celebhq_text_image_cond.yaml``` for generating images using text and mask conditional trained ddpm
+**2. Dataset Loading Errors**
+```
+Error: "Dataset path does not exist"
+Solution: Check relative path '../Dataset' or use absolute path
+```
 
+**3. Missing Checkpoints**
+```
+Error: "VQVAE checkpoint not found"
+Solution: Train autoencoder first before LDM:
+python train_model.py --stage autoencoder
+```
 
-## Output 
-Outputs will be saved according to the configuration present in yaml files.
+**4. Poor Image Quality**
+```
+Solutions:
+- Increase training epochs
+- Adjust guidance scale during inference
+- Check dataset quality and size
+- Tune learning rates
+```
 
-For every run a folder of ```task_name``` key in config will be created
+**5. Text Conditioning Not Working**
+```
+Solutions:
+- Verify text prompts are diverse enough
+- Reduce cond_drop_prob in config
+- Check text embedding model (CLIP vs BERT)
+```
 
-During training of autoencoder the following output will be saved 
-* Latest Autoencoder and discriminator checkpoint in ```task_name``` directory
-* Sample reconstructions in ```task_name/vqvae_autoencoder_samples```
+### Performance Optimization
 
-During inference of autoencoder the following output will be saved
-* Reconstructions for random images in  ```task_name```
-* Latents will be save in ```task_name/vqvae_latent_dir_name``` if mentioned in config
+**1. Enable Mixed Precision Training:**
+Add to training script:
+```python
+from torch.cuda.amp import autocast, GradScaler
+scaler = GradScaler()
+```
 
-During training and inference of ddpm following output will be saved
-* During training of unconditional or conditional DDPM we will save the latest checkpoint in ```task_name``` directory
-* During sampling, unconditional sampled image grid for all timesteps in ```task_name/samples/*.png``` . The final decoded generated image will be `x0_0.png`. Images from `x0_999.png` to `x0_1.png` will be latent image predictions of denoising process from T=999 to T=1. Generated Image is at T=0
-* During sampling, class conditionally sampled image grid for all timesteps in ```task_name/cond_class_samples/*.png``` . The final decoded generated image will be `x0_0.png`.  Images from `x0_999.png` to `x0_1.png` will be latent image predictions of denoising process from T=999 to T=1. Generated Image is at T=0
-* During sampling, text only conditionally sampled image grid for all timesteps in ```task_name/cond_text_samples/*.png``` . The final decoded generated image will be `x0_0.png` . Images from `x0_999.png` to `x0_1.png` will be latent image predictions of denoising process from T=999 to T=1. Generated Image is at T=0
-* During sampling, image only conditionally sampled image grid for all timesteps in ```task_name/cond_text_image_samples/*.png``` . The final decoded generated image will be `x0_0.png`. Images from `x0_999.png` to `x0_1.png` will be latent image predictions of denoising process from T=999 to T=1. Generated Image is at T=0
+**2. Increase DataLoader Workers:**
+```python
+DataLoader(dataset, num_workers=4, pin_memory=True)
+```
 
+**3. Use Latent Caching:**
+```yaml
+train_params:
+  save_latents: True  # Cache encoded images for faster training
+```
 
+### Evaluation Metrics
 
+**Visual Quality Assessment:**
+1. Generate sample images on validation set
+2. Compare with ground truth optical images
+3. Check for artifacts and consistency
 
+**Quantitative Metrics (Optional):**
+```python
+# LPIPS (Learned Perceptual Image Patch Similarity)
+# SSIM (Structural Similarity Index)
+# FID (Fréchet Inception Distance)
+```
+
+## Advanced Usage
+
+### Custom Text Embeddings
+Modify conditioning for domain-specific vocabulary:
+```yaml
+ldm_params:
+  condition_config:
+    text_condition_config:
+      text_embed_model: 'bert'  # Try BERT instead of CLIP
+      text_embed_dim: 768
+```
+
+### Multi-Scale Training
+For higher resolution images:
+```yaml
+dataset_params:
+  im_size: 512
+autoencoder_params:
+  down_channels: [64, 128, 256, 512, 512]  # Add more layers
+```
+
+### Resume Training
+```python
+# In train_model.py, add checkpoint loading:
+if os.path.exists(checkpoint_path):
+    model.load_state_dict(torch.load(checkpoint_path))
+    print("Resumed training from checkpoint")
+```
+
+## Tips for Best Results
+
+1. **Dataset Quality:** Ensure good alignment between SAR and optical images
+2. **Text Diversity:** Use varied text prompts during training
+3. **Gradual Training:** Start with smaller images, then increase resolution
+4. **Regular Validation:** Generate samples throughout training to monitor progress
+5. **Hyperparameter Search:** Experiment with different learning rates and batch sizes
+
+## Model Validation and Testing
+
+### During Training
+The training process automatically uses:
+- **Training set**: For model parameter updates
+- **Validation set**: For monitoring overfitting (if implemented)
+- **Test set**: Reserved for final evaluation
+
+### Test Set Evaluation
+After training, evaluate your model on the test set:
+
+```python
+# Example test set evaluation
+from dataset.sar_dataset import SARDataset
+from torch.utils.data import DataLoader
+
+# Load test dataset
+test_dataset = SARDataset(
+    split='test',
+    im_path='../Dataset',
+    im_size=256,
+    im_channels=3,
+    condition_config={'condition_types': ['text', 'image']},
+    train_split=0.7,
+    val_split=0.15,
+    test_split=0.15,
+    random_seed=42
+)
+
+test_loader = DataLoader(test_dataset, batch_size=4, shuffle=False)
+
+# Run inference on test set
+for batch in test_loader:
+    optical_images, conditions = batch
+    # Your evaluation code here
+    pass
+```
+
+### Split Integrity
+The system ensures:
+- ✅ **No data leakage**: Test images never seen during training
+- ✅ **Reproducible splits**: Same random seed = same splits
+- ✅ **Balanced distribution**: Regions/seasons distributed across splits
+- ✅ **Proper proportions**: Configurable train/val/test ratios
+
+## Support and Resources
+
+- Check console outputs for detailed error messages
+- Monitor GPU memory usage with `nvidia-smi`
+- Use TensorBoard for training visualization (optional integration)
+- Refer to original Stable Diffusion papers for theoretical background
+
+For additional help, ensure your environment matches the requirements and that the dataset structure is exactly as specified.

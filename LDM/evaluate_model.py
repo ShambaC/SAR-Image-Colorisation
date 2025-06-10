@@ -297,7 +297,8 @@ def evaluate_model(config, num_samples=None, guidance_scale=7.5, save_samples=Tr
     
     # Evaluation loop
     for i, data in enumerate(tqdm(test_loader, desc="Evaluating")):
-        try:            # Unpack data
+        try:            
+            # Unpack data
             if isinstance(data, tuple):
                 ground_truth, cond_inputs = data
                 
@@ -360,7 +361,8 @@ def evaluate_model(config, num_samples=None, guidance_scale=7.5, save_samples=Tr
             lpips_val = metrics_calculator.lpips(generated_image, ground_truth_norm)
             mse_val = metrics_calculator.mse(generated_image, ground_truth_norm)
             mae_val = metrics_calculator.mae(generated_image, ground_truth_norm)
-              # Store results (convert to Python types)
+            
+            # Store results (convert to Python types)
             psnr_val = float(psnr_val) if psnr_val is not None else None
             ssim_val = float(ssim_val) if ssim_val is not None else None
             lpips_val = float(lpips_val) if lpips_val is not None else None

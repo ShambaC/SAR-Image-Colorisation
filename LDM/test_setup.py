@@ -100,7 +100,7 @@ try:
             's1_folder': ['s1_001', 's1_001'],
             's2_folder': ['s2_001', 's2_001'],
             'image_name': ['test_001.png', 'test_002.png'],
-            'region': ['urban', 'forest'],
+            'region': ['tropical', 'arctic'],
             'season': ['summer', 'autumn']
         })
         

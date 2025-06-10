@@ -211,7 +211,7 @@ def interactive_inference(config):
             print("File not found. Please try again.")
             continue
         
-        region = input("Enter region (e.g., urban, forest, water): ").strip()
+        region = input("Enter region (arctic, temperate, tropical): ").strip()
         if not region:
             region = "unknown"
         

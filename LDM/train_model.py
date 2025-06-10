@@ -71,7 +71,7 @@ def train_autoencoder(config):
             images = images.float().to(device)
             
             optimizer.zero_grad()
-              # Forward pass through autoencoder
+            # Forward pass through autoencoder
             model_output = vqvae(images)
             output, z, vq_losses = model_output
             
