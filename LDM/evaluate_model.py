@@ -180,6 +180,10 @@ def sample_with_conditioning(ldm, scheduler, sar_image, text_prompt, text_tokeni
     """Sample optical image conditioned on SAR image and text prompt"""
     im_size = 256 // 2 ** sum(autoencoder_config['down_sample'])
     
+    # Ensure SAR image has batch dimension
+    if len(sar_image.shape) == 3:  # [C, H, W]
+        sar_image = sar_image.unsqueeze(0)  # [1, C, H, W]
+    
     # Prepare text conditioning
     with torch.no_grad():
         text_embed = get_text_representation([text_prompt], text_tokenizer, text_model, device)
@@ -326,8 +330,11 @@ def evaluate_model(config, num_samples=None, guidance_scale=7.5, save_samples=Tr
             if not isinstance(sar_image, torch.Tensor):
                 print(f"Warning: SAR image is not a tensor, got {type(sar_image)}, skipping...")
                 continue
-            
             sar_image = preprocess_sar_image(sar_image, device)
+            
+            # Debug: Print tensor shapes for first few samples
+            if i < 3:
+                print(f"Sample {i} - SAR image shape: {sar_image.shape}, Ground truth shape: {ground_truth.shape}")
             
             # Generate optical image
             with torch.no_grad():
