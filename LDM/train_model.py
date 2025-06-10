@@ -452,7 +452,7 @@ class SARTrainer:
         
         if self.scheduler:
             checkpoint['scheduler_state_dict'] = self.scheduler.state_dict()
-        
+            
         # Save regular checkpoint
         checkpoint_path = os.path.join(self.save_dir, f"sar_model_epoch_{self.current_epoch}.pt")
         # torch.save(checkpoint, checkpoint_path)
