@@ -1,7 +1,13 @@
 from flask import Flask, request, jsonify, send_file
 from flask_cors import CORS
+from utils.get_info import get_country, get_season, calc_hemisphere, get_region
+
 import subprocess
+import sys
+import platform
 import os
+import utils
+
 import uuid
 
 app = Flask(__name__)
@@ -33,29 +39,46 @@ def generate_image():
         image_path = os.path.join(UPLOAD_FOLDER, filename)
         image.save(image_path)
 
-        # Run your ML code
+        # Define paths
+        base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+        tool_dir = os.path.join(base_dir, "Dataset Tools/copernicus_api")
+        ldm_dir = os.path.join(base_dir, "LDM")
+
+        country = get_country(lat, long)
+        hemisphere = calc_hemisphere(lat)
+        season = get_season(country, f"{img_date}T12:00:00Z", hemisphere)
+        temp_region = get_region(lat)
+
+        if platform.system() == "Windows" :
+            activate_script = os.path.join(ldm_dir, "Scripts", "activate.bat")
+            command = f'cmd.exe \c "{activate_script} && python infer_model --config config/sar_config.yaml --mode single --sar_image ../Application/backend/{image_path} --region {temp_region} --season {season} --output colorized_{filename}"'
+        else :
+            activate_script = os.path.join(ldm_dir, "bin", "activate")
+            command = f'/bin/bash \c "source {activate_script} && python infer_model --config config/sar_config.yaml --mode single --sar_image ../Application/backend/{image_path} --region {temp_region} --season {season} --output colorized_{filename}"'
+
         result = subprocess.run(
-            ['python', 'dummy.py', image_path, lat, long, img_date],
-            check=True,
-            capture_output=True,
+            command,
+            shell=True,
+            cwd=ldm_dir,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
             text=True
         )
-
-        # output_filename = result.stdout.strip()
 
         return jsonify({
             "status": "success",
             "message": "Image generated successfully!",
-            "imageUrl": "/jk.jpg"
-        })
+            "imageUrl": f"colorized_{filename}"
+        }), 200
+    
     except subprocess.CalledProcessError as e:
         return jsonify({"status": "error", "message": e.stderr.strip()}), 500
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
     
-@app.route('/jk.jpg')
-def serve_jk():
-    return send_file('jk.jpg')
+@app.route('/image/<string:filename>')
+def serve_image(filename):
+    return send_file(f'../../LDM/{filename}')
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(debug=True, port=5000)
