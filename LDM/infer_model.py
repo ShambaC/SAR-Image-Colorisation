@@ -20,17 +20,18 @@ from pipeline import generate
 
 class SARInference:
     """Inference pipeline for SAR image colorization"""
-    
     def __init__(
         self,
         model_checkpoint_path: str,
         clip_checkpoint_path: str = None,
+        vae_checkpoint_path: str = None,
         device: str = "auto"
     ):
         """
         Args:
             model_checkpoint_path: Path to the trained diffusion model checkpoint
             clip_checkpoint_path: Path to the trained CLIP model checkpoint
+            vae_checkpoint_path: Path to the trained VAE model checkpoint
             device: Device to use ('auto', 'cuda', 'cpu')
         """
         # Setup device
@@ -43,7 +44,7 @@ class SARInference:
         
         # Load model configuration and checkpoints
         self.config = self._load_config(model_checkpoint_path)
-        self.models = self._load_models(model_checkpoint_path, clip_checkpoint_path)
+        self.models = self._load_models(model_checkpoint_path, clip_checkpoint_path, vae_checkpoint_path)
         self.tokenizer = self._load_tokenizer()
         
         # Setup image transforms
@@ -96,8 +97,7 @@ class SARInference:
             # Create default tokenizer
             tokenizer = SimpleTokenizer(vocab_size=1000, max_length=77)
         return tokenizer
-    
-    def _load_models(self, model_checkpoint_path: str, clip_checkpoint_path: str = None) -> dict:
+    def _load_models(self, model_checkpoint_path: str, clip_checkpoint_path: str = None, vae_checkpoint_path: str = None) -> dict:
         """Load all required models"""
         models = {}
         
@@ -119,20 +119,59 @@ class SARInference:
         # Load VAE Encoder/Decoder
         models["encoder"] = VAE_Encoder()
         models["decoder"] = VAE_Decoder()
-          # Load Diffusion model
+        
+        # Load VAE weights if available
+        if vae_checkpoint_path and os.path.exists(vae_checkpoint_path):
+            print(f"Loading VAE checkpoint from {vae_checkpoint_path}")
+            vae_checkpoint = torch.load(vae_checkpoint_path, map_location=self.device)
+            
+            # Extract encoder and decoder from VAE checkpoint
+            vae_state_dict = vae_checkpoint["model_state_dict"]
+            
+            # Create state dicts for encoder and decoder
+            encoder_state_dict = {}
+            decoder_state_dict = {}
+            
+            for key, value in vae_state_dict.items():
+                if key.startswith("encoder."):
+                    # Remove "encoder." prefix
+                    new_key = key[8:]
+                    encoder_state_dict[new_key] = value
+                elif key.startswith("decoder."):
+                    # Remove "decoder." prefix  
+                    new_key = key[8:]
+                    decoder_state_dict[new_key] = value
+            
+            # Load the state dicts
+            if encoder_state_dict:
+                models["encoder"].load_state_dict(encoder_state_dict)
+                print("Loaded VAE encoder weights")
+            if decoder_state_dict:
+                models["decoder"].load_state_dict(decoder_state_dict)
+                print("Loaded VAE decoder weights")
+        
+        # Load Diffusion model
         models["diffusion"] = Diffusion(in_channels=8)  # 8 channels for SAR+optical concatenation
         
         # Load main model checkpoint
         if os.path.exists(model_checkpoint_path):
             checkpoint = torch.load(model_checkpoint_path, map_location=self.device)
             
-            # Load individual model states
-            if "encoder_state_dict" in checkpoint:
-                models["encoder"].load_state_dict(checkpoint["encoder_state_dict"])
-            if "decoder_state_dict" in checkpoint:
-                models["decoder"].load_state_dict(checkpoint["decoder_state_dict"])
-            if "diffusion_state_dict" in checkpoint:
-                models["diffusion"].load_state_dict(checkpoint["diffusion_state_dict"])
+            # Load diffusion model state
+            if "model_state_dict" in checkpoint:
+                # Extract diffusion model weights
+                diffusion_state_dict = {}
+                model_state_dict = checkpoint["model_state_dict"]
+                
+                for key, value in model_state_dict.items():
+                    if key.startswith("diffusion."):
+                        # Remove "diffusion." prefix
+                        new_key = key[10:]
+                        diffusion_state_dict[new_key] = value
+                
+                if diffusion_state_dict:
+                    models["diffusion"].load_state_dict(diffusion_state_dict)
+                    print("Loaded diffusion model weights")
             
             print(f"Loaded model checkpoint from {model_checkpoint_path}")
         
@@ -478,11 +517,13 @@ class SARInference:
 
 
 def main():
-    parser = argparse.ArgumentParser(description="SAR Image Colorization Inference")
+    parser = argparse.ArgumentParser(description="SAR Image Colorization Inference")    
     parser.add_argument("--model_checkpoint", type=str, required=True,
                        help="Path to the trained model checkpoint")
     parser.add_argument("--clip_checkpoint", type=str, default=None,
                        help="Path to the trained CLIP checkpoint")
+    parser.add_argument("--vae_checkpoint", type=str, default=None,
+                       help="Path to the trained VAE checkpoint")
     parser.add_argument("--mode", type=str, choices=["single", "batch", "dataset"], 
                        default="single", help="Inference mode")
     
@@ -522,11 +563,11 @@ def main():
                        choices=["auto", "cuda", "cpu"], help="Device to use")
     
     args = parser.parse_args()
-    
-    # Initialize inference pipeline
+      # Initialize inference pipeline
     inference = SARInference(
         model_checkpoint_path=args.model_checkpoint,
         clip_checkpoint_path=args.clip_checkpoint,
+        vae_checkpoint_path=args.vae_checkpoint,
         device=args.device
     )
     

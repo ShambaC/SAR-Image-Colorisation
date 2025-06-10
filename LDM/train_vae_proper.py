@@ -19,6 +19,7 @@ from tqdm import tqdm
 import numpy as np
 from PIL import Image
 import torchvision.transforms as transforms
+import torchvision.utils
 import matplotlib.pyplot as plt
 
 from dataset import SARDataset, create_dataloaders
@@ -26,63 +27,73 @@ from encoder import VAE_Encoder
 from decoder import VAE_Decoder
 
 
-class VAEModel(nn.Module):
-    """Complete VAE Model for SAR and Optical Images"""
+class ProperVAE(nn.Module):
+    """VAE using the existing VAE_Encoder and VAE_Decoder classes with proper handling"""
     
     def __init__(self, latent_dim=4, beta=1.0):
         super().__init__()
         
+        self.latent_dim = latent_dim
+        self.beta = beta
+        
+        # Use the existing VAE components
         self.encoder = VAE_Encoder()
         self.decoder = VAE_Decoder()
-        self.latent_dim = latent_dim
-        self.beta = beta  # Beta-VAE weight for KL divergence
-        
-    def encode(self, x):
-        """Encode images to latent space with reparameterization"""
-        # The VAE_Encoder returns latents directly, but we need mean and logvar
-        # For now, we'll use the encoder as-is and add reparameterization
-        latents = self.encoder(x)
-        
-        # Split latents into mean and logvar (assume first half is mean, second is logvar)
-        # This is a simplification - you might need to modify VAE_Encoder for proper implementation
-        batch_size, channels, height, width = latents.shape
-        
-        if channels == 8:  # If encoder outputs both mean and logvar
-            mean = latents[:, :4, :, :]
-            logvar = latents[:, 4:, :, :]
-        else:  # If encoder only outputs mean, create logvar
-            mean = latents
-            logvar = torch.zeros_like(mean)
-            
-        return mean, logvar
     
-    def reparameterize(self, mean, logvar):
-        """Reparameterization trick for VAE"""
-        std = torch.exp(0.5 * logvar)
-        eps = torch.randn_like(std)
-        return mean + eps * std
+    def encode(self, x):
+        """
+        Encode images to latent space - properly handles the encoder's reparameterization
+        Returns mean, logvar for VAE loss computation, and final latents for decoding
+        """
+        batch_size, _, height, width = x.shape
+        latent_height, latent_width = height // 8, width // 8
+        
+        # Generate noise for the encoder's reparameterization
+        noise = torch.randn(batch_size, 4, latent_height, latent_width, device=x.device)
+        
+        # We need to extract mean and logvar before reparameterization
+        # Let's modify the encoder forward pass to get intermediate results
+        x_encoded = x
+        for module in self.encoder:
+            if getattr(module, 'stride', None) == (2, 2):
+                x_encoded = F.pad(x_encoded, (0, 1, 0, 1))
+            x_encoded = module(x_encoded)
+        
+        # Extract mean and log_variance from the 8-channel output
+        mean, log_variance = torch.chunk(x_encoded, 2, dim=1)
+        log_variance = torch.clamp(log_variance, -30, 20)
+        
+        # Apply reparameterization trick
+        variance = log_variance.exp()
+        stdev = variance.sqrt()
+        latents = mean + stdev * noise
+        
+        # Apply scaling
+        latents = latents * 0.18215
+        
+        return mean, log_variance, latents
     
     def decode(self, z):
         """Decode latent vectors to images"""
         return self.decoder(z)
     
     def forward(self, x):
-        """Full forward pass through VAE"""
-        mean, logvar = self.encode(x)
-        z = self.reparameterize(mean, logvar)
-        reconstruction = self.decode(z)
-        
+        """Full forward pass"""
+        mean, logvar, latents = self.encode(x)
+        reconstruction = self.decode(latents)
         return reconstruction, mean, logvar
     
     def compute_loss(self, x, reconstruction, mean, logvar):
-        """Compute VAE loss: reconstruction + KL divergence"""
+        """Compute VAE loss (ELBO)"""
+        batch_size = x.shape[0]
+        
         # Reconstruction loss (MSE)
-        recon_loss = F.mse_loss(reconstruction, x, reduction='sum')
+        recon_loss = F.mse_loss(reconstruction, x, reduction='sum') / batch_size
         
         # KL divergence loss
-        kl_loss = -0.5 * torch.sum(1 + logvar - mean.pow(2) - logvar.exp())
+        kl_loss = -0.5 * torch.sum(1 + logvar - mean.pow(2) - logvar.exp()) / batch_size
         
-        # Total loss
+        # Total VAE loss (ELBO)
         total_loss = recon_loss + self.beta * kl_loss
         
         return {
@@ -133,11 +144,11 @@ class VAETrainer:
         self.current_epoch = 0
         self.global_step = 0
     
-    def _setup_model(self) -> VAEModel:
+    def _setup_model(self) -> ProperVAE:
         """Setup VAE model"""
         vae_config = self.config.get("vae", {})
         
-        model = VAEModel(
+        model = ProperVAE(
             latent_dim=vae_config.get("latent_dim", 4),
             beta=vae_config.get("beta", 1.0)
         )
@@ -205,6 +216,10 @@ class VAETrainer:
             # We'll train on both SAR and optical images
             sar_images = batch['s1_image'].to(self.device)
             optical_images = batch['s2_image'].to(self.device)
+            
+            # Normalize to [-1, 1] for better training
+            sar_images = sar_images * 2.0 - 1.0
+            optical_images = optical_images * 2.0 - 1.0
             
             # Train on SAR images
             self.optimizer.zero_grad()
@@ -288,6 +303,10 @@ class VAETrainer:
                 sar_images = batch['s1_image'].to(self.device)
                 optical_images = batch['s2_image'].to(self.device)
                 
+                # Normalize to [-1, 1] for better training
+                sar_images = sar_images * 2.0 - 1.0
+                optical_images = optical_images * 2.0 - 1.0
+                
                 # Validate on SAR images
                 sar_recon, sar_mean, sar_logvar = self.model(sar_images)
                 sar_losses = self.model.compute_loss(sar_images, sar_recon, sar_mean, sar_logvar)
@@ -360,6 +379,10 @@ class VAETrainer:
             sar_images = batch['s1_image'][:num_samples].to(self.device)
             optical_images = batch['s2_image'][:num_samples].to(self.device)
             
+            # Normalize inputs
+            sar_images = sar_images * 2.0 - 1.0
+            optical_images = optical_images * 2.0 - 1.0
+            
             # Generate reconstructions
             sar_recon, _, _ = self.model(sar_images)
             optical_recon, _, _ = self.model(optical_images)
@@ -368,11 +391,11 @@ class VAETrainer:
             save_dir = os.path.join(self.save_dir, "samples")
             os.makedirs(save_dir, exist_ok=True)
             
-            # Convert to numpy and save
-            sar_orig = sar_images.cpu().numpy()
-            sar_rec = sar_recon.cpu().numpy()
-            opt_orig = optical_images.cpu().numpy()
-            opt_rec = optical_recon.cpu().numpy()
+            # Convert to numpy and denormalize for display
+            sar_orig = ((sar_images + 1) * 0.5).clamp(0, 1).cpu().numpy()
+            sar_rec = ((sar_recon + 1) * 0.5).clamp(0, 1).cpu().numpy()
+            opt_orig = ((optical_images + 1) * 0.5).clamp(0, 1).cpu().numpy()
+            opt_rec = ((optical_recon + 1) * 0.5).clamp(0, 1).cpu().numpy()
             
             # Create comparison plots
             fig, axes = plt.subplots(4, 4, figsize=(16, 16))
@@ -501,10 +524,10 @@ def get_default_vae_config():
             "beta": 1.0  # Beta-VAE weight for KL divergence
         },
         "training": {
-            "batch_size": 8,
+            "batch_size": 64,
             "learning_rate": 1e-4,
             "weight_decay": 0.01,
-            "epochs": 50,
+            "epochs": 2,
             "save_every": 10,
             "max_grad_norm": 1.0,
             "log_interval": 50
