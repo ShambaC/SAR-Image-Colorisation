@@ -48,7 +48,7 @@ class SARDataset(Dataset):
         self.im_ext = im_ext
         self.im_path = im_path
         self.latent_maps = None
-        self.use_latents = False
+        self.use_latents = True
         self.random_seed = random_seed
         
         # Get condition types

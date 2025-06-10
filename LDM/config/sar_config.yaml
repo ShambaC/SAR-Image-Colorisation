@@ -53,9 +53,9 @@ autoencoder_params:
   num_up_layers: 2
 
 train_params:
-  seed: 1111
+  seed: 42
   task_name: 'sar_colorization'
-  ldm_batch_size: 16  # Reduced for memory efficiency
+  ldm_batch_size: 16
   autoencoder_batch_size: 8
   disc_start: 15000
   disc_weight: 0.5
@@ -64,10 +64,10 @@ train_params:
   perceptual_weight: 1
   kl_weight: 0.000005
   ldm_epochs: 10
-  autoencoder_epochs: 4
+  autoencoder_epochs: 25
   num_samples: 4
   num_grid_rows: 2
-  ldm_lr: 0.000005
+  ldm_lr: 1e-4
   autoencoder_lr: 0.00001
   autoencoder_acc_steps: 4
   autoencoder_img_save_steps: 64
