@@ -94,55 +94,62 @@ def generate(
             # (Height, Width, Channel) -> (Batch_Size, Height, Width, Channel)
             input_image_tensor = input_image_tensor.unsqueeze(0)
             # (Batch_Size, Height, Width, Channel) -> (Batch_Size, Channel, Height, Width)
-            input_image_tensor = input_image_tensor.permute(0, 3, 1, 2)
-
+            input_image_tensor = input_image_tensor.permute(0, 3, 1, 2)            # Encode SAR image to latent space (this will be our condition)
             # (Batch_Size, 4, Latents_Height, Latents_Width)
             encoder_noise = torch.randn(latents_shape, generator=generator, device=device)
             # (Batch_Size, 4, Latents_Height, Latents_Width)
-            latents = encoder(input_image_tensor, encoder_noise)
-
-            # Add noise to the latents (the encoded input image)
+            sar_latents = encoder(input_image_tensor, encoder_noise)
+            
+            # Start with random noise for the optical image generation
             # (Batch_Size, 4, Latents_Height, Latents_Width)
+            optical_latents = torch.randn(latents_shape, generator=generator, device=device)
+            
+            # Add noise to the optical latents according to strength
             sampler.set_strength(strength=strength)
-            latents = sampler.add_noise(latents, sampler.timesteps[0])
+            optical_latents = sampler.add_noise(optical_latents, sampler.timesteps[0])
 
             to_idle(encoder)
         else:
+            # Without input image, start with random noise for both SAR and optical
             # (Batch_Size, 4, Latents_Height, Latents_Width)
-            latents = torch.randn(latents_shape, generator=generator, device=device)
+            sar_latents = torch.randn(latents_shape, generator=generator, device=device)
+            optical_latents = torch.randn(latents_shape, generator=generator, device=device)
 
         diffusion = models["diffusion"]
-        diffusion.to(device)
-
+        diffusion.to(device)        
         timesteps = tqdm(sampler.timesteps)
         for i, timestep in enumerate(timesteps):
             # (1, 320)
             time_embedding = get_time_embedding(timestep).to(device)
 
-            # (Batch_Size, 4, Latents_Height, Latents_Width)
-            model_input = latents
+            # Concatenate SAR latents with optical latents for 8-channel input
+            # (Batch_Size, 4, Latents_Height, Latents_Width) + (Batch_Size, 4, Latents_Height, Latents_Width)
+            # -> (Batch_Size, 8, Latents_Height, Latents_Width)
+            model_input = torch.cat([sar_latents, optical_latents], dim=1)
 
             if do_cfg:
-                # (Batch_Size, 4, Latents_Height, Latents_Width) -> (2 * Batch_Size, 4, Latents_Height, Latents_Width)
+                # (Batch_Size, 8, Latents_Height, Latents_Width) -> (2 * Batch_Size, 8, Latents_Height, Latents_Width)
                 model_input = model_input.repeat(2, 1, 1, 1)
 
             # model_output is the predicted noise
-            # (Batch_Size, 4, Latents_Height, Latents_Width) -> (Batch_Size, 4, Latents_Height, Latents_Width)
+            # (Batch_Size, 8, Latents_Height, Latents_Width) -> (Batch_Size, 4, Latents_Height, Latents_Width)
             model_output = diffusion(model_input, context, time_embedding)
 
             if do_cfg:
                 output_cond, output_uncond = model_output.chunk(2)
                 model_output = cfg_scale * (output_cond - output_uncond) + output_uncond
 
+            # Update only the optical latents (the SAR latents remain fixed as condition)
             # (Batch_Size, 4, Latents_Height, Latents_Width) -> (Batch_Size, 4, Latents_Height, Latents_Width)
-            latents = sampler.step(timestep, latents, model_output)
+            optical_latents = sampler.step(timestep, optical_latents, model_output)
 
         to_idle(diffusion)
 
         decoder = models["decoder"]
         decoder.to(device)
+        # Decode the optical latents to get the final colorized image
         # (Batch_Size, 4, Latents_Height, Latents_Width) -> (Batch_Size, 3, Height, Width)
-        images = decoder(latents)
+        images = decoder(optical_latents)
         to_idle(decoder)
 
         images = rescale(images, (-1, 1), (0, 255), clamp=True)
