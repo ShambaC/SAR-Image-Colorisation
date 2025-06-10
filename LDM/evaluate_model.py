@@ -163,8 +163,11 @@ def load_models(config):
     return vqvae, ldm, text_tokenizer, text_model
 
 
-def preprocess_sar_image(sar_tensor):
+def preprocess_sar_image(sar_tensor, device):
     """Preprocess SAR image tensor for conditioning"""
+    # Move to device first
+    sar_tensor = sar_tensor.to(device)
+    
     # Ensure the SAR image is in [-1, 1] range
     if sar_tensor.max() <= 1.0 and sar_tensor.min() >= 0.0:
         # Convert from [0, 1] to [-1, 1]
@@ -262,7 +265,7 @@ def evaluate_model(config, num_samples=None, guidance_scale=7.5, save_samples=Tr
         print(f"Evaluating on {num_samples} random samples")
     
     # Create data loader
-    test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False, num_workers=0)
+    test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False, num_workers=0, collate_fn=custom_collate_fn)
     
     # Initialize metrics
     metrics_calculator = ImageMetrics(device)
@@ -290,11 +293,18 @@ def evaluate_model(config, num_samples=None, guidance_scale=7.5, save_samples=Tr
     
     # Evaluation loop
     for i, data in enumerate(tqdm(test_loader, desc="Evaluating")):
-        try:
-            # Unpack data
+        try:            # Unpack data
             if isinstance(data, tuple):
                 ground_truth, cond_inputs = data
-                text_prompt = cond_inputs['text'][0] if 'text' in cond_inputs else "Colorise image"
+                
+                # Handle text prompt (might be a list from DataLoader batching)
+                if 'text' in cond_inputs:
+                    text_prompt = cond_inputs['text']
+                    if isinstance(text_prompt, list):
+                        text_prompt = text_prompt[0]  # Take first item from batch
+                else:
+                    text_prompt = "Colorise image"
+                
                 sar_image = cond_inputs['image'] if 'image' in cond_inputs else None
             else:
                 ground_truth = data
@@ -307,7 +317,16 @@ def evaluate_model(config, num_samples=None, guidance_scale=7.5, save_samples=Tr
                 print(f"Warning: No SAR image for sample {i}, skipping...")
                 continue
             
-            sar_image = preprocess_sar_image(sar_image)
+            # Handle case where sar_image might be a list (from DataLoader batching)
+            if isinstance(sar_image, list):
+                sar_image = sar_image[0]  # Take first (and only) item from batch
+            
+            # Ensure sar_image is a tensor
+            if not isinstance(sar_image, torch.Tensor):
+                print(f"Warning: SAR image is not a tensor, got {type(sar_image)}, skipping...")
+                continue
+            
+            sar_image = preprocess_sar_image(sar_image, device)
             
             # Generate optical image
             with torch.no_grad():
@@ -486,6 +505,39 @@ def create_metric_plots(results, results_dir):
         plt.tight_layout()
         plt.savefig(os.path.join(results_dir, 'metrics_per_sample.png'), dpi=300, bbox_inches='tight')
         plt.close()
+
+
+def custom_collate_fn(batch):
+    """Custom collate function to handle SAR dataset batching"""
+    if len(batch) == 1:
+        # Single sample case
+        sample = batch[0]
+        if isinstance(sample, tuple):
+            # (target_image, cond_inputs) format
+            target, cond_inputs = sample
+            
+            # Convert target to batch format
+            target_batch = target.unsqueeze(0)
+            
+            # Handle conditioning inputs
+            cond_batch = {}
+            for key, value in cond_inputs.items():
+                if key == 'text':
+                    # Text should remain as list for batch
+                    cond_batch[key] = [value] if isinstance(value, str) else value
+                elif key == 'image':
+                    # Image should be batched
+                    cond_batch[key] = value.unsqueeze(0) if isinstance(value, torch.Tensor) else value
+                else:
+                    cond_batch[key] = value
+            
+            return target_batch, cond_batch
+        else:
+            # Just target image
+            return sample.unsqueeze(0)
+    else:
+        # Multiple samples - use default collation
+        return torch.utils.data.dataloader.default_collate(batch)
 
 
 def main():
