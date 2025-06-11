@@ -44,10 +44,10 @@ def generate_image():
         tool_dir = os.path.join(base_dir, "Dataset Tools/copernicus_api")
         ldm_dir = os.path.join(base_dir, "LDM")
 
-        country = get_country(lat, long)
-        hemisphere = calc_hemisphere(lat)
+        country = get_country(float(lat), float(long))
+        hemisphere = calc_hemisphere(float(lat))
         season = get_season(country, f"{img_date}T12:00:00Z", hemisphere)
-        temp_region = get_region(lat)
+        temp_region = get_region(float(lat))
 
         if platform.system() == "Windows" :
             activate_script = os.path.join(ldm_dir, "Scripts", "activate.bat")
