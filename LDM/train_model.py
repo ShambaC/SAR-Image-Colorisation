@@ -225,7 +225,7 @@ def train_ldm(config):
             param.requires_grad = False
     
     # Optimizer and loss
-    optimizer = Adam(model.parameters(), lr=train_config['ldm_lr'])
+    optimizer = Adam(model.parameters(), lr=float(train_config['ldm_lr']))
     criterion = torch.nn.MSELoss()
     
     # Training loop
