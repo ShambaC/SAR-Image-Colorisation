@@ -231,11 +231,13 @@ class SARDataset(Dataset):
             s1_tensor = self.load_image(self.s1_images[index])
             cond_inputs['image'] = s1_tensor
         #######################################
-        
-        # Load target optical image
+          # Load target optical image
         if self.use_latents:
             # Use precomputed latents for faster training
             latent = self.latent_maps[self.s2_images[index]]
+            # Remove batch dimension if present (latents are saved with batch dimension)
+            if len(latent.shape) == 4 and latent.shape[0] == 1:
+                latent = latent.squeeze(0)  # Remove batch dimension: [1, C, H, W] -> [C, H, W]
             if len(self.condition_types) == 0:
                 return latent
             else:
