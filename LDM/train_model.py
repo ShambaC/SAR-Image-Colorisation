@@ -46,18 +46,37 @@ def train_autoencoder(config):
     # Create models
     vqvae = VQVAE(im_channels=dataset_config['im_channels'],
                   model_config=autoencoder_model_config).to(device)
-    
-    # Optimizer
+      # Optimizer
     optimizer = Adam(vqvae.parameters(), lr=train_config['autoencoder_lr'])
     criterion = torch.nn.MSELoss()
     
     # Create task directory
     os.makedirs(train_config['task_name'], exist_ok=True)
     
-    # Training loop
-    num_epochs = train_config['autoencoder_epochs']
+    # Check for existing checkpoint and resume if requested
+    autoencoder_checkpoint_path = os.path.join(train_config['task_name'], train_config['vqvae_autoencoder_ckpt_name'])
+    start_epoch = 0
+    best_loss = float('inf')
     
-    for epoch_idx in range(num_epochs):
+    if os.path.exists(autoencoder_checkpoint_path) and train_config.get('resume_training', False):
+        print(f'Loading autoencoder checkpoint from {autoencoder_checkpoint_path}')
+        checkpoint = torch.load(autoencoder_checkpoint_path, map_location=device)
+        
+        if isinstance(checkpoint, dict) and 'model_state_dict' in checkpoint:
+            # Enhanced checkpoint format
+            vqvae.load_state_dict(checkpoint['model_state_dict'])
+            optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+            start_epoch = checkpoint['epoch']
+            best_loss = checkpoint.get('best_loss', float('inf'))
+            print(f'Resuming autoencoder training from epoch {start_epoch}, best loss: {best_loss:.4f}')
+        else:
+            # Simple state dict format (backward compatibility)
+            vqvae.load_state_dict(checkpoint)
+            print('Loaded autoencoder weights, starting from epoch 0')
+    
+    # Training loop
+    num_epochs = train_config['autoencoder_epochs']    
+    for epoch_idx in range(start_epoch, num_epochs):
         vqvae.train()
         losses = []
         
@@ -90,13 +109,26 @@ def train_autoencoder(config):
             # Save sample images periodically
             if batch_idx % train_config['autoencoder_img_save_steps'] == 0:
                 save_sample_images(images, output, epoch_idx, batch_idx, train_config)
-        
         avg_loss = np.mean(losses)
         print(f'Epoch {epoch_idx + 1}/{num_epochs} | Loss: {avg_loss:.4f}')
         
-        # Save checkpoint
+        # Update best loss
+        if avg_loss < best_loss:
+            best_loss = avg_loss
+        
+        # Save enhanced checkpoint
+        checkpoint_data = {
+            'epoch': epoch_idx + 1,
+            'model_state_dict': vqvae.state_dict(),
+            'optimizer_state_dict': optimizer.state_dict(),
+            'loss': avg_loss,
+            'best_loss': best_loss
+        }
+        torch.save(checkpoint_data, autoencoder_checkpoint_path)
+        
+        # Also save simple state dict for backward compatibility
         torch.save(vqvae.state_dict(), 
-                  os.path.join(train_config['task_name'], train_config['vqvae_autoencoder_ckpt_name']))
+                  os.path.join(train_config['task_name'], 'vqvae_simple.pth'))
     
     print("Autoencoder training completed!")
     
@@ -212,26 +244,54 @@ def train_ldm(config):
         vqvae = VQVAE(im_channels=dataset_config['im_channels'],
                      model_config=autoencoder_model_config).to(device)
         vqvae.eval()
-        
         vqvae_path = os.path.join(train_config['task_name'], train_config['vqvae_autoencoder_ckpt_name'])
         if os.path.exists(vqvae_path):
-            print('Loaded VQVAE checkpoint')
-            vqvae.load_state_dict(torch.load(vqvae_path, map_location=device))
+            print('Loading VQVAE checkpoint')
+            checkpoint = torch.load(vqvae_path, map_location=device)
+            
+            if isinstance(checkpoint, dict) and 'model_state_dict' in checkpoint:
+                # Enhanced checkpoint format
+                vqvae.load_state_dict(checkpoint['model_state_dict'])
+                print('Loaded VQVAE from enhanced checkpoint')
+            else:
+                # Simple state dict format (backward compatibility)
+                vqvae.load_state_dict(checkpoint)
+                print('Loaded VQVAE from simple checkpoint')
         else:
             raise Exception('VQVAE checkpoint not found. Please train autoencoder first.')
         
         # Freeze VQVAE parameters
         for param in vqvae.parameters():
             param.requires_grad = False
-    
-    # Optimizer and loss
+      # Optimizer and loss
     optimizer = Adam(model.parameters(), lr=float(train_config['ldm_lr']))
     criterion = torch.nn.MSELoss()
+    
+    # Check for existing LDM checkpoint and resume if requested
+    ldm_checkpoint_path = os.path.join(train_config['task_name'], train_config['ldm_ckpt_name'])
+    start_epoch = 0
+    best_loss = float('inf')
+    
+    if os.path.exists(ldm_checkpoint_path) and train_config.get('resume_training', False):
+        print(f'Loading LDM checkpoint from {ldm_checkpoint_path}')
+        checkpoint = torch.load(ldm_checkpoint_path, map_location=device)
+        
+        if isinstance(checkpoint, dict) and 'model_state_dict' in checkpoint:
+            # Enhanced checkpoint format
+            model.load_state_dict(checkpoint['model_state_dict'])
+            optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+            start_epoch = checkpoint['epoch']
+            best_loss = checkpoint.get('best_loss', float('inf'))
+            print(f'Resuming LDM training from epoch {start_epoch}, best loss: {best_loss:.4f}')
+        else:
+            # Simple state dict format (backward compatibility)
+            model.load_state_dict(checkpoint)
+            print('Loaded LDM weights, starting from epoch 0')
     
     # Training loop
     num_epochs = train_config['ldm_epochs']
     
-    for epoch_idx in range(num_epochs):
+    for epoch_idx in range(start_epoch, num_epochs):
         losses = []
         
         for data in tqdm(data_loader, desc=f"LDM Epoch {epoch_idx+1}/{num_epochs}"):
@@ -275,13 +335,26 @@ def train_ldm(config):
             losses.append(loss.item())
             loss.backward()
             optimizer.step()
-        
         avg_loss = np.mean(losses)
         print(f'LDM Epoch {epoch_idx + 1}/{num_epochs} | Loss: {avg_loss:.4f}')
         
-        # Save checkpoint
+        # Update best loss
+        if avg_loss < best_loss:
+            best_loss = avg_loss
+        
+        # Save enhanced checkpoint
+        checkpoint_data = {
+            'epoch': epoch_idx + 1,
+            'model_state_dict': model.state_dict(),
+            'optimizer_state_dict': optimizer.state_dict(),
+            'loss': avg_loss,
+            'best_loss': best_loss
+        }
+        torch.save(checkpoint_data, ldm_checkpoint_path)
+        
+        # Also save simple state dict for backward compatibility
         torch.save(model.state_dict(), 
-                  os.path.join(train_config['task_name'], train_config['ldm_ckpt_name']))
+                  os.path.join(train_config['task_name'], 'ldm_simple.pth'))
     
     print("LDM training completed!")
 
@@ -293,6 +366,8 @@ def main():
                        help='Path to configuration file')
     parser.add_argument('--stage', choices=['autoencoder', 'ldm', 'both'],
                        default='both', help='Training stage')
+    parser.add_argument('--resume', action='store_true',
+                       help='Resume training from existing checkpoint')
     
     args = parser.parse_args()
     
@@ -303,6 +378,10 @@ def main():
         except yaml.YAMLError as exc:
             print(exc)
             return
+    
+    # Override resume setting from command line
+    if args.resume:
+        config['train_params']['resume_training'] = True
     
     print("Configuration loaded:")
     print(yaml.dump(config, default_flow_style=False))
