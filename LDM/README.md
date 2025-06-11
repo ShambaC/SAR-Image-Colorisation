@@ -203,11 +203,96 @@ Train both stages sequentially:
 python train_model.py --config config/sar_config.yaml --stage both
 ```
 
+### Resume Training
+Training can be resumes easily
+```bash
+# Resume both autoencoder and LDM training
+python train_model.py --resume
+
+# Resume only LDM training
+python train_model.py --stage ldm --resume
+
+# Resume only autoencoder training  
+python train_model.py --stage autoencoder --resume
+
+# Use custom config with resume
+python train_model.py --config my_config.yaml --resume
+```
+
 ### Monitoring Training
 
 1. **Check loss curves:** Training progress is printed to console
 2. **Sample images:** Autoencoder samples saved in `sar_colorization/autoencoder_samples/`
 3. **Checkpoints:** Model weights saved in `sar_colorization/`
+4. **Loss tracking:** Comprehensive loss data saved in `sar_colorization/losses/`
+
+#### Loss Data Files
+The training process automatically saves detailed loss information:
+
+**Files created:**
+- `sar_colorization/losses/autoencoder_loss_history.json` - Complete autoencoder loss data
+- `sar_colorization/losses/autoencoder_loss_history.csv` - CSV format for easy plotting
+- `sar_colorization/losses/ldm_loss_history.json` - Complete LDM loss data  
+- `sar_colorization/losses/ldm_loss_history.csv` - CSV format for easy plotting
+
+**Data includes:**
+- **Autoencoder**: Reconstruction loss, codebook loss, commitment loss, total loss per batch
+- **LDM**: Diffusion loss per batch
+- **Metadata**: Timestamps, epoch averages, best losses, batch indices
+
+#### Plotting Loss Curves
+Use the provided plotting utility to visualize training progress:
+
+```bash
+# Plot both autoencoder and LDM losses
+python plot_losses.py --task_name sar_colorization --type both
+
+# Plot only autoencoder losses
+python plot_losses.py --task_name sar_colorization --type autoencoder
+
+# Plot only LDM losses  
+python plot_losses.py --task_name sar_colorization --type ldm
+
+# Save plots to files
+python plot_losses.py --task_name sar_colorization --type both --save --output_dir my_plots
+```
+
+**Plot features:**
+- Epoch-level loss progression
+- Batch-level loss details
+- Loss component breakdown (autoencoder)
+- Moving averages and distributions
+- Side-by-side training comparison
+
+#### Manual Plotting from CSV
+For custom analysis, load CSV files directly:
+
+```python
+import pandas as pd
+import matplotlib.pyplot as plt
+
+# Load autoencoder losses
+ae_df = pd.read_csv('sar_colorization/losses/autoencoder_loss_history.csv')
+
+# Plot epoch-level progress
+epoch_avg = ae_df.groupby('epoch')['total_loss'].mean()
+plt.plot(epoch_avg.index, epoch_avg.values)
+plt.xlabel('Epoch')
+plt.ylabel('Average Total Loss')
+plt.title('Autoencoder Training Progress')
+plt.show()
+
+# Load LDM losses
+ldm_df = pd.read_csv('sar_colorization/losses/ldm_loss_history.csv')
+
+# Plot LDM progress
+epoch_avg = ldm_df.groupby('epoch')['loss'].mean()
+plt.plot(epoch_avg.index, epoch_avg.values)
+plt.xlabel('Epoch')  
+plt.ylabel('Average Loss')
+plt.title('LDM Training Progress')
+plt.show()
+```
 
 ## Inference
 

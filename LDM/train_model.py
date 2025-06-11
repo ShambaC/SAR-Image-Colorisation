@@ -3,6 +3,10 @@ import argparse
 import numpy as np
 import torch
 import os
+import json
+import csv
+import time
+from datetime import datetime
 from tqdm import tqdm
 from torch.optim import Adam
 from dataset.sar_dataset import SARDataset
@@ -15,6 +19,104 @@ from utils.config_utils import *
 from utils.diffusion_utils import *
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+
+def save_loss_data(loss_history, loss_type, task_name):
+    """
+    Save loss data in both JSON and CSV formats for easy plotting
+    
+    Args:
+        loss_history: Dictionary containing loss data
+        loss_type: 'autoencoder' or 'ldm'
+        task_name: Task directory name
+    """
+    # Create losses directory
+    losses_dir = os.path.join(task_name, 'losses')
+    os.makedirs(losses_dir, exist_ok=True)
+    
+    # Save as JSON for easy loading
+    json_path = os.path.join(losses_dir, f'{loss_type}_loss_history.json')
+    with open(json_path, 'w') as f:
+        json.dump(loss_history, f, indent=2)
+    
+    # Save as CSV for plotting with pandas/matplotlib
+    csv_path = os.path.join(losses_dir, f'{loss_type}_loss_history.csv')
+    with open(csv_path, 'w', newline='') as f:
+        writer = csv.writer(f)
+        
+        if loss_type == 'autoencoder':
+            # Headers for autoencoder losses
+            writer.writerow(['epoch', 'batch', 'recon_loss', 'codebook_loss', 'commitment_loss', 'total_loss', 'epoch_avg_loss', 'best_loss', 'timestamp'])
+            
+            for epoch_data in loss_history['epochs']:
+                epoch_num = epoch_data['epoch']
+                epoch_avg = epoch_data['avg_loss']
+                best_loss = epoch_data['best_loss']
+                timestamp = epoch_data['timestamp']
+                
+                for batch_data in epoch_data['batches']:
+                    writer.writerow([
+                        epoch_num,
+                        batch_data['batch'],
+                        batch_data['recon_loss'],
+                        batch_data['codebook_loss'], 
+                        batch_data['commitment_loss'],
+                        batch_data['total_loss'],
+                        epoch_avg,
+                        best_loss,
+                        timestamp
+                    ])
+        
+        elif loss_type == 'ldm':
+            # Headers for LDM losses
+            writer.writerow(['epoch', 'batch', 'loss', 'epoch_avg_loss', 'best_loss', 'timestamp'])
+            
+            for epoch_data in loss_history['epochs']:
+                epoch_num = epoch_data['epoch']
+                epoch_avg = epoch_data['avg_loss']
+                best_loss = epoch_data['best_loss']
+                timestamp = epoch_data['timestamp']
+                
+                for batch_data in epoch_data['batches']:
+                    writer.writerow([
+                        epoch_num,
+                        batch_data['batch'],
+                        batch_data['loss'],
+                        epoch_avg,
+                        best_loss,
+                        timestamp
+                    ])
+    
+    print(f"Loss data saved to {json_path} and {csv_path}")
+
+
+def load_loss_history(loss_type, task_name):
+    """
+    Load existing loss history if resuming training
+    
+    Args:
+        loss_type: 'autoencoder' or 'ldm'
+        task_name: Task directory name
+    
+    Returns:
+        Dictionary containing loss history or empty structure
+    """
+    losses_dir = os.path.join(task_name, 'losses')
+    json_path = os.path.join(losses_dir, f'{loss_type}_loss_history.json')
+    
+    if os.path.exists(json_path):
+        try:
+            with open(json_path, 'r') as f:
+                return json.load(f)
+        except:
+            print(f"Warning: Could not load existing loss history from {json_path}")
+    
+    # Return empty structure
+    return {
+        'training_started': datetime.now().isoformat(),
+        'config': {},
+        'epochs': []
+    }
 
 
 def train_autoencoder(config):
@@ -74,11 +176,22 @@ def train_autoencoder(config):
             vqvae.load_state_dict(checkpoint)
             print('Loaded autoencoder weights, starting from epoch 0')
     
+    # Load existing loss history if resuming
+    loss_history = load_loss_history('autoencoder', train_config['task_name'])
+    if loss_history['epochs']:
+        start_epoch = loss_history['epochs'][-1]['epoch']
+        best_loss = loss_history['epochs'][-1]['best_loss']
+        print(f"Resuming from epoch {start_epoch}, best loss: {best_loss:.4f}")
+    
     # Training loop
     num_epochs = train_config['autoencoder_epochs']    
     for epoch_idx in range(start_epoch, num_epochs):
         vqvae.train()
         losses = []
+        epoch_loss_data = {
+            'epoch': epoch_idx + 1,
+            'batches': []
+        }
         
         for batch_idx, data in enumerate(tqdm(data_loader, desc=f"Epoch {epoch_idx+1}/{num_epochs}")):
             # For autoencoder training, we only need the optical images (targets)
@@ -106,6 +219,16 @@ def train_autoencoder(config):
             total_loss.backward()
             optimizer.step()
             
+            # Save loss data for this batch
+            batch_loss_data = {
+                'batch': batch_idx,
+                'recon_loss': recon_loss.item(),
+                'codebook_loss': vq_losses['codebook_loss'].item(),
+                'commitment_loss': vq_losses['commitment_loss'].item(),
+                'total_loss': total_loss.item()
+            }
+            epoch_loss_data['batches'].append(batch_loss_data)
+            
             # Save sample images periodically
             if batch_idx % train_config['autoencoder_img_save_steps'] == 0:
                 save_sample_images(images, output, epoch_idx, batch_idx, train_config)
@@ -129,6 +252,17 @@ def train_autoencoder(config):
         # Also save simple state dict for backward compatibility
         torch.save(vqvae.state_dict(), 
                   os.path.join(train_config['task_name'], 'vqvae_simple.pth'))
+        
+        # Save loss history
+        timestamp = datetime.now().isoformat()
+        loss_history['epochs'].append({
+            'epoch': epoch_idx + 1,
+            'avg_loss': avg_loss,
+            'best_loss': best_loss,
+            'timestamp': timestamp,
+            'batches': epoch_loss_data['batches']
+        })
+        save_loss_data(loss_history, 'autoencoder', train_config['task_name'])
     
     print("Autoencoder training completed!")
     
@@ -288,13 +422,23 @@ def train_ldm(config):
             model.load_state_dict(checkpoint)
             print('Loaded LDM weights, starting from epoch 0')
     
-    # Training loop
+    # Load existing loss history if resuming
+    loss_history = load_loss_history('ldm', train_config['task_name'])
+    if loss_history['epochs']:
+        start_epoch = loss_history['epochs'][-1]['epoch']
+        best_loss = loss_history['epochs'][-1]['best_loss']
+        print(f"Resuming from epoch {start_epoch}, best loss: {best_loss:.4f}")
+      # Training loop
     num_epochs = train_config['ldm_epochs']
     
     for epoch_idx in range(start_epoch, num_epochs):
         losses = []
+        epoch_loss_data = {
+            'epoch': epoch_idx + 1,
+            'batches': []
+        }
         
-        for data in tqdm(data_loader, desc=f"LDM Epoch {epoch_idx+1}/{num_epochs}"):
+        for batch_idx, data in enumerate(tqdm(data_loader, desc=f"LDM Epoch {epoch_idx+1}/{num_epochs}")):
             target_image, cond_input = data
             
             optimizer.zero_grad()
@@ -335,6 +479,13 @@ def train_ldm(config):
             losses.append(loss.item())
             loss.backward()
             optimizer.step()
+            
+            # Save loss data for this batch
+            batch_loss_data = {
+                'batch': batch_idx,
+                'loss': loss.item()
+            }
+            epoch_loss_data['batches'].append(batch_loss_data)
         avg_loss = np.mean(losses)
         print(f'LDM Epoch {epoch_idx + 1}/{num_epochs} | Loss: {avg_loss:.4f}')
         
@@ -355,6 +506,16 @@ def train_ldm(config):
         # Also save simple state dict for backward compatibility
         torch.save(model.state_dict(), 
                   os.path.join(train_config['task_name'], 'ldm_simple.pth'))
+          # Save loss history
+        timestamp = datetime.now().isoformat()
+        loss_history['epochs'].append({
+            'epoch': epoch_idx + 1,
+            'avg_loss': avg_loss,
+            'best_loss': best_loss,
+            'timestamp': timestamp,
+            'batches': epoch_loss_data['batches']
+        })
+        save_loss_data(loss_history, 'ldm', train_config['task_name'])
     
     print("LDM training completed!")
 
