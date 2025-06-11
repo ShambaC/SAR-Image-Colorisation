@@ -6,15 +6,14 @@ import torch
 
 def load_latents(latent_path):
     r"""
-    Simple utility to save latents to speed up ldm training
+    Simple utility to load latents to speed up ldm training
     :param latent_path:
     :return:
     """
     latent_maps = {}
     for fname in glob.glob(os.path.join(latent_path, '*.pt')):
-        s = pickle.load(open(fname, 'rb'))
-        for k, v in s.items():
-            latent_maps[k] = v[0]
+        data = torch.load(fname, map_location='cpu')
+        latent_maps[data['path']] = data['latent']
     return latent_maps
 
 
