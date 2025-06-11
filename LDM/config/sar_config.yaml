@@ -14,13 +14,13 @@ diffusion_params:
   beta_end: 0.012
 
 ldm_params:
-  down_channels: [256, 384, 512, 768]
+  down_channels: [256, 512, 768]
   mid_channels: [768, 512]
-  down_sample: [True, True, True]
-  attn_down: [True, True, True]
+  down_sample: [True, True]
+  attn_down: [True, True]
   time_emb_dim: 512
   norm_channels: 32
-  num_heads: 16
+  num_heads: 8
   conv_out_channels: 128
   num_down_layers: 2
   num_mid_layers: 2
@@ -57,13 +57,13 @@ train_params:
   task_name: 'sar_colorization'
   ldm_batch_size: 64
   autoencoder_batch_size: 64
-  disc_start: 15000
+  disc_start: 2000
   disc_weight: 0.5
   codebook_weight: 1
   commitment_beta: 0.2
-  perceptual_weight: 1
+  perceptual_weight: 0.1
   kl_weight: 0.000005
-  ldm_epochs: 60
+  ldm_epochs: 70
   autoencoder_epochs: 25
   num_samples: 4
   num_grid_rows: 2
