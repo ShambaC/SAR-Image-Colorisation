@@ -40,7 +40,7 @@ def generate_image():
         image.save(image_path)
 
         # Define paths
-        base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+        base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
         tool_dir = os.path.join(base_dir, "Dataset Tools/copernicus_api")
         ldm_dir = os.path.join(base_dir, "LDM")
 
