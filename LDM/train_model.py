@@ -316,6 +316,9 @@ def save_latents_for_dataset(vqvae, dataset, train_config):
             torch.save({'path': image_path, 'latent': latent.cpu()}, latent_path)
 
 
+def count_parameters(model):
+        return sum(p.numel() for p in model.parameters() if p.requires_grad)
+
 def train_ldm(config):
     """
     Train the Latent Diffusion Model with text and image conditioning
@@ -370,6 +373,8 @@ def train_ldm(config):
     model = Unet(im_channels=autoencoder_model_config['z_channels'],
                 model_config=diffusion_model_config).to(device)
     model.train()
+
+    print(f"LDM Model Parameters: {count_parameters(model):,}")
     
     # Load VQVAE if not using latents
     vqvae = None
@@ -424,7 +429,7 @@ def train_ldm(config):
     
     # Load existing loss history if resuming
     loss_history = load_loss_history('ldm', train_config['task_name'])
-    if loss_history['epochs']:
+    if loss_history['epochs'] and train_config.get('resume_training', False):
         start_epoch = loss_history['epochs'][-1]['epoch']
         best_loss = loss_history['epochs'][-1]['best_loss']
         print(f"Resuming from epoch {start_epoch}, best loss: {best_loss:.4f}")
