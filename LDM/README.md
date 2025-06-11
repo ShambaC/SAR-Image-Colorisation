@@ -307,7 +307,7 @@ python infer_model.py \
   --config config/sar_config.yaml \
   --mode single \
   --sar_image path/to/sar_image.png \
-  --region "urban" \
+  --region "tropical" \
   --season "summer" \
   --output colorized_result.png
 ```
@@ -319,7 +319,7 @@ python infer_model.py \
   --mode batch \
   --sar_folder path/to/sar_images/ \
   --output results_folder/ \
-  --region "forest" \
+  --region "tropical" \
   --season "autumn"
 ```
 
@@ -329,7 +329,7 @@ python infer_model.py \
   --config config/sar_config.yaml \
   --mode single \
   --sar_image image.png \
-  --text_prompt "Colorise image, Region: urban, Season: winter"
+  --text_prompt "Colorise image, Region: tropical, Season: winter"
 ```
 
 ## Model evaluation

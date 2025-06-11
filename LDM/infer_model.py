@@ -26,11 +26,18 @@ def load_models(config):
     # Load VQVAE
     vqvae = VQVAE(im_channels=dataset_config['im_channels'],
                   model_config=autoencoder_model_config).to(device)
-    
     vqvae_path = os.path.join(train_config['task_name'], train_config['vqvae_autoencoder_ckpt_name'])
     if os.path.exists(vqvae_path):
-        vqvae.load_state_dict(torch.load(vqvae_path, map_location=device))
-        print(f"Loaded VQVAE from {vqvae_path}")
+        checkpoint = torch.load(vqvae_path, map_location=device, weights_only=False)
+        
+        if isinstance(checkpoint, dict) and 'model_state_dict' in checkpoint:
+            # Enhanced checkpoint format
+            vqvae.load_state_dict(checkpoint['model_state_dict'])
+            print(f"Loaded VQVAE from enhanced checkpoint: {vqvae_path}")
+        else:
+            # Simple state dict format (backward compatibility)
+            vqvae.load_state_dict(checkpoint)
+            print(f"Loaded VQVAE from simple checkpoint: {vqvae_path}")
     else:
         raise FileNotFoundError(f"VQVAE checkpoint not found at {vqvae_path}")
     
@@ -39,11 +46,18 @@ def load_models(config):
     # Load Diffusion Model
     ldm = Unet(im_channels=autoencoder_model_config['z_channels'],
                model_config=diffusion_model_config).to(device)
-    
     ldm_path = os.path.join(train_config['task_name'], train_config['ldm_ckpt_name'])
     if os.path.exists(ldm_path):
-        ldm.load_state_dict(torch.load(ldm_path, map_location=device))
-        print(f"Loaded LDM from {ldm_path}")
+        checkpoint = torch.load(ldm_path, map_location=device, weights_only=False)
+        
+        if isinstance(checkpoint, dict) and 'model_state_dict' in checkpoint:
+            # Enhanced checkpoint format
+            ldm.load_state_dict(checkpoint['model_state_dict'])
+            print(f"Loaded LDM from enhanced checkpoint: {ldm_path}")
+        else:
+            # Simple state dict format (backward compatibility)
+            ldm.load_state_dict(checkpoint)
+            print(f"Loaded LDM from simple checkpoint: {ldm_path}")
     else:
         raise FileNotFoundError(f"LDM checkpoint not found at {ldm_path}")
     
