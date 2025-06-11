@@ -51,10 +51,10 @@ def generate_image():
 
         if platform.system() == "Windows" :
             activate_script = os.path.join(ldm_dir, "Scripts", "activate.bat")
-            command = f'cmd.exe /c "{activate_script} && python infer_model --config config/sar_config.yaml --mode single --sar_image ../Application/backend/{image_path} --region {temp_region} --season {season} --output colorized_{filename}"'
+            command = f'cmd.exe /c "{activate_script} && python infer_model.py --config config/sar_config.yaml --mode single --sar_image ../Application/backend/{image_path} --region {temp_region} --season {season} --output colorized_{filename}"'
         else :
             activate_script = os.path.join(ldm_dir, "bin", "activate")
-            command = f'/bin/bash /c "source {activate_script} && python infer_model --config config/sar_config.yaml --mode single --sar_image ../Application/backend/{image_path} --region {temp_region} --season {season} --output colorized_{filename}"'
+            command = f'/bin/bash /c "source {activate_script} && python infer_model.py --config config/sar_config.yaml --mode single --sar_image ../Application/backend/{image_path} --region {temp_region} --season {season} --output colorized_{filename}"'
 
         result = subprocess.run(
             command,
