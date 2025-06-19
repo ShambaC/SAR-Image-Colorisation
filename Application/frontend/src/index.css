@@ -31,7 +31,7 @@ h1{
   align-items: center;
   gap: 2rem;
   margin-top: 1rem;
-  margin-bottom: 2rem;
+  margin-bottom: 4rem;
   padding: 1.5rem 1.5rem;
   border-radius: 1rem;
 
@@ -95,15 +95,6 @@ h1{
       border: 2px var(--baseCol2) solid;
       border-radius: 0.8rem;
     }
-    textarea{
-      padding: 0.7rem 0.8rem;
-      font-family: var(--baseFont1);
-      color: var(--baseCol2);
-      font-size: 1rem;
-      font-weight: 500;
-      border: 2px var(--baseCol2) solid;
-      border-radius: 0.8rem;
-    }
     .coords{
       display: flex;
       justify-content: space-around;
@@ -128,35 +119,71 @@ h1{
         background-color: transparent;
         color: var(--baseCol2);
       }
+      &:disabled{
+        opacity: 0.6;
+        cursor: not-allowed;
+      }
     }
   }
 
 }
 
-button{
-  padding: 1rem 1rem;
-  text-decoration: none;
-  font-family: var(--baseFont1);
-  color: var(--baseCol1);
-  font-size: 1rem;
-  font-weight: 500;
-  background-color: var(--baseCol2);
-  border: 2px var(--baseCol2) solid;
-  border-radius: 0.8rem;
-  cursor: pointer;
-  &:hover{
-    background-color: transparent;
-    color: var(--baseCol2);
-  }
-}
+@media (max-width:768px){
+  #inputForm{
+    width: 100%;
 
-button:disabled{
-  opacity: 0.6;
-  cursor: not-allowed;
+    label{
+      font-size: 1rem;
+    }
+    input::file-selector-button{
+      padding: 0.8rem 0.8rem;
+      font-size: 0.9rem;
+    }
+
+    .imageInfo{
+      flex-direction: column;
+      input{
+        padding: 0.7rem 0.5rem;
+      }
+
+      .coords{
+        flex-direction: column;
+      }
+    }
+    .generate{
+      button{
+        padding: 0.8rem 0.8rem;
+        font-size: 0.9rem;
+      }
+    }
+  }
 }
 
 .clearImage{
   margin-top: 1rem;
+  button{
+    padding: 1rem 1rem;
+    font-family: var(--baseFont1);
+    color: var(--baseCol1);
+    font-size: 1rem;
+    font-weight: 500;
+    background-color: var(--baseCol2);
+    border: 2px var(--baseCol2) solid;
+    border-radius: 0.8rem;
+    cursor: pointer;
+    &:hover{
+      background-color: transparent;
+      color: var(--baseCol2);
+    }
+  }
+}
+@media (max-width:768px){
+  .clearImage{
+    button{
+      padding: 0.7rem 0.8rem;
+      font-size: 0.9rem;
+    }
+  }
 }
 
 footer{

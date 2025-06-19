@@ -121,7 +121,7 @@ const Form = () => {
         {generatedImageURL && (
           <div className="generatedPreview">
             <h3>Generated Image Preview</h3>
-            <img src={generatedImageURL} alt="Generated output" style={{ maxWidth: "256px", marginTop: "1rem" }} />
+            <img src={generatedImageURL} alt="Generated output"/>
           </div>
         )}
       </form>
