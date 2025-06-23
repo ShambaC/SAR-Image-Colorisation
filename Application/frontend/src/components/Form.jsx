@@ -48,12 +48,7 @@ const Form = () => {
       });
       const result = await response.json();
       alert(`Status: ${result.status}\nMessage: ${result.message}`);
-      setSelectedImage(null);
-      setPreviewURL(null);
-      setLat("");
-      setLong("");
-      setImgDate("");
-      if (inputFileRef.current) inputFileRef.current.value = null;
+      
       setGeneratedImageURL(`http://localhost:5000/image/${result.imageUrl}`);
     } catch (error) {
       console.error("Error during generation:", error);
