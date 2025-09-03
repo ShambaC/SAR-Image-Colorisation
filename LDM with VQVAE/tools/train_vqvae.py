@@ -10,8 +10,8 @@ from models.vqvae import VQVAE
 from models.lpips import LPIPS
 from models.discriminator import Discriminator
 from torch.utils.data.dataloader import DataLoader
-from dataset.mnist_dataset import MnistDataset
-from dataset.celeb_dataset import CelebDataset
+
+from dataset.sar_dataset import SARColorizationDataset
 from torch.optim import Adam
 from torchvision.utils import make_grid
 
@@ -45,8 +45,7 @@ def train(args):
                   model_config=autoencoder_config).to(device)
     # Create the dataset
     im_dataset_cls = {
-        'mnist': MnistDataset,
-        'celebhq': CelebDataset,
+        'sar_colorization': SARColorizationDataset,
     }.get(dataset_config['name'])
     
     im_dataset = im_dataset_cls(split='train',
@@ -199,6 +198,6 @@ def train(args):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Arguments for vq vae training')
     parser.add_argument('--config', dest='config_path',
-                        default='config/mnist.yaml', type=str)
+                        default='config/sar_colorization.yaml', type=str)
     args = parser.parse_args()
     train(args)

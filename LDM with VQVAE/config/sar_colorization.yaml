@@ -1,0 +1,53 @@
+task_name: "sar_colorization"
+dataset_name: "sar_colorization"
+dataset_path: "data/SAR_Dataset"
+output_dir: "./output"
+
+train_batch_size: 4
+val_batch_size: 4
+num_workers: 4
+image_size: 256
+autoencoder_acc_steps: 1
+save_latents: True
+
+autoencoder_config:
+  embedding_dim: 256
+  n_codes: 2048
+  n_filters: 128
+  down_sampling_levels: [2, 2, 2, 2]
+  n_res_blocks: 2
+  
+ldm_params:
+  in_channels: 256
+  out_channels: 256
+  n_channels: 256
+  n_heads: 8
+  n_res_blocks: 2
+  attention_levels: [0, 1, 2]
+  channel_multipliers: [1, 2, 4, 4]
+  n_blocks: 2
+  timesteps: 1000
+  beta_start: 0.0001
+  beta_end: 0.02
+  time_embedding_dim: 256
+  
+  condition_config:
+    condition_types: [ 'text', 'image' ]
+    text_condition_config:
+        text_embed_model: 'clip'
+        text_embed_dim: 512
+        cond_drop_prob: 0.1
+    image_condition_config:
+       image_condition_input_channels: 1
+       image_condition_output_channels: 3
+       image_condition_h : 256
+       image_condition_w : 256
+       cond_drop_prob: 0.1
+
+optimizer_params:
+  lr: 0.0001
+
+train_steps: 100000
+val_steps: 1000
+log_steps: 100
+save_steps: 1000

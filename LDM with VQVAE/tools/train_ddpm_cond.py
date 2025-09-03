@@ -3,8 +3,7 @@ import argparse
 import numpy as np
 from tqdm import tqdm
 from torch.optim import Adam
-from dataset.mnist_dataset import MnistDataset
-from dataset.celeb_dataset import CelebDataset
+from dataset.sar_dataset import SARColorizationDataset
 from torch.utils.data import DataLoader
 from models.unet_cond_base import Unet
 from models.vqvae import VQVAE
@@ -58,8 +57,7 @@ def train(args):
                 empty_text_embed = get_text_representation([''], text_tokenizer, text_model, device)
             
     im_dataset_cls = {
-        'mnist': MnistDataset,
-        'celebhq': CelebDataset,
+        'sar_colorization': SARColorizationDataset,
     }.get(dataset_config['name'])
     
     im_dataset = im_dataset_cls(split='train',
@@ -181,6 +179,6 @@ def train(args):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Arguments for ddpm training')
     parser.add_argument('--config', dest='config_path',
-                        default='config/celebhq_text_cond_clip.yaml', type=str)
+                        default='config/sar_colorization.yaml', type=str)
     args = parser.parse_args()
     train(args)

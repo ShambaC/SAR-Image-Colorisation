@@ -10,8 +10,8 @@ from torch.utils.data.dataloader import DataLoader
 from torchvision.utils import make_grid
 from tqdm import tqdm
 
-from dataset.celeb_dataset import CelebDataset
-from dataset.mnist_dataset import MnistDataset
+from dataset.sar_dataset import SARColorizationDataset
+
 from models.vqvae import VQVAE
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -32,8 +32,7 @@ def infer(args):
     
     # Create the dataset
     im_dataset_cls = {
-        'mnist': MnistDataset,
-        'celebhq': CelebDataset,
+        'sar_colorization': SARColorizationDataset,
     }.get(dataset_config['name'])
     
     im_dataset = im_dataset_cls(split='train',
@@ -92,28 +91,19 @@ def infer(args):
                 os.mkdir(latent_path)
             print('Saving Latents for {}'.format(dataset_config['name']))
             
-            fname_latent_map = {}
-            part_count = 0
-            count = 0
-            for idx, im in enumerate(tqdm(data_loader)):
+            for idx, data in enumerate(tqdm(data_loader)):
+                im = data[0] if isinstance(data, list) else data
                 encoded_output, _ = model.encode(im.float().to(device))
-                fname_latent_map[im_dataset.images[idx]] = encoded_output.cpu()
-                # Save latents every 1000 images
-                if (count+1) % 1000 == 0:
-                    pickle.dump(fname_latent_map, open(os.path.join(latent_path,
-                                                                    '{}.pkl'.format(part_count)), 'wb'))
-                    part_count += 1
-                    fname_latent_map = {}
-                count += 1
-            if len(fname_latent_map) > 0:
-                pickle.dump(fname_latent_map, open(os.path.join(latent_path,
-                                                   '{}.pkl'.format(part_count)), 'wb'))
+                
+                # Use index as filename for the latent
+                latent_filename = f"{idx}.pt"
+                torch.save(encoded_output.cpu(), os.path.join(latent_path, latent_filename))
             print('Done saving latents')
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Arguments for vq vae inference')
     parser.add_argument('--config', dest='config_path',
-                        default='config/mnist.yaml', type=str)
+                        default='config/sar_colorization.yaml', type=str)
     args = parser.parse_args()
     infer(args)
