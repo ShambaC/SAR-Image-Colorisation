@@ -1,3 +1,5 @@
 # Folder specific gitignore
 share
 sar_colorization
+data/r*
+data/data*

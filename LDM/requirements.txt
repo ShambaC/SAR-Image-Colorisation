@@ -1,0 +1,10 @@
+pandas
+matplotlib
+kaggle
+torchvision
+numpy
+tqdm
+transformers
+lightning
+pillow
+PyYAML
