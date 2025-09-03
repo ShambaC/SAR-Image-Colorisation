@@ -1,0 +1,41 @@
+# -----------------
+# Project Paths
+# -----------------
+data_root: "./data/"
+output_dir: "./output/"
+vae_ckpt_path: "./output/vae.pt"
+diffusion_ckpt_path: "./output/diffusion.pt"
+
+# Pretrained model from original instructions
+pretrained_ckpt_path: "./data/v1-5-pruned-emaonly.ckpt" 
+
+# -----------------
+# Dataset & Dataloader Settings
+# -----------------
+image_height: 256
+image_width: 256
+batch_size: 4
+num_workers: 2
+
+# -----------------
+# VAE Training Hyperparameters
+# -----------------
+vae_train:
+  epochs: 50
+  lr: 2e-5
+  kl_weight: 0.1 # Weight for the KL divergence loss component
+
+# -----------------
+# Diffusion Model Training Hyperparameters
+# -----------------
+diffusion_train:
+  epochs: 100
+  lr: 1e-5
+  num_inference_steps: 50 # For validation/testing during training
+  cfg_scale: 7.5
+
+# -----------------
+# General Settings
+# -----------------
+device: "cuda"
+seed: 42

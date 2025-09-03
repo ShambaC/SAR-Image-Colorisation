@@ -178,3 +178,4 @@ Scripts
 pyvenv.cfg
 Include
 /Dataset/*
+LDM/data/v1-5-pruned-emaonly.ckpt
