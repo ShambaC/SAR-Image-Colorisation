@@ -6,8 +6,12 @@ output_dir: "./output/"
 vae_ckpt_path: "./output/vae.pt"
 diffusion_ckpt_path: "./output/diffusion.pt"
 
+# --- LOGGING PATHS ---
+vae_log_path: "./output/vae_losses.csv"
+diffusion_log_path: "./output/diffusion_losses.csv"
+
 # Pretrained model from original instructions
-pretrained_ckpt_path: "./data/v1-5-pruned-emaonly.ckpt" 
+pretrained_ckpt_path: "./data/v1-5-pruned-emaonly.ckpt"
 
 # -----------------
 # Dataset & Dataloader Settings
@@ -21,7 +25,7 @@ num_workers: 2
 # VAE Training Hyperparameters
 # -----------------
 vae_train:
-  epochs: 50
+  epochs: 20
   lr: 2.0e-5
   kl_weight: 0.1 # Weight for the KL divergence loss component
 
@@ -29,7 +33,7 @@ vae_train:
 # Diffusion Model Training Hyperparameters
 # -----------------
 diffusion_train:
-  epochs: 100
+  epochs: 10
   lr: 1.0e-5
   num_inference_steps: 50 # For validation/testing during training
   cfg_scale: 7.5

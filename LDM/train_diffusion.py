@@ -4,8 +4,9 @@ import torch.nn.functional as F
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 import yaml
-from transformers import CLIPTokenizer
+import csv
 
+from transformers import CLIPTokenizer
 from diffusion import Diffusion
 from clip import CLIP
 from encoder import VAE_Encoder
@@ -17,6 +18,12 @@ def train(config):
     device = config['device']
     output_dir = config['output_dir']
     os.makedirs(output_dir, exist_ok=True)
+
+    # --- Logging Setup ---
+    log_file = open(config['diffusion_log_path'], 'w', newline='')
+    log_writer = csv.writer(log_file)
+    log_writer.writerow(['epoch', 'avg_loss'])
+    # ---------------------
     
     # Load Models
     # 1. VAE (Encoder) - Trained in train_vae.py
@@ -63,6 +70,10 @@ def train(config):
     for epoch in range(config['diffusion_train']['epochs']):
         progress_bar = tqdm(dataloader, desc=f"Epoch {epoch+1}")
         total_loss = 0.0
+
+        # --- Loss accumulator for logging ---
+        epoch_total_loss = 0.0
+        # ------------------------------------
 
         for batch in progress_bar:
             optimizer.zero_grad()
@@ -116,15 +127,27 @@ def train(config):
             loss.backward()
             optimizer.step()
 
+            # --- Accumulate loss ---
+            epoch_total_loss += loss.item()
+            # ----------------------
+
             total_loss += loss.item()
             progress_bar.set_postfix(loss=loss.item())
 
-        avg_loss = total_loss / len(dataloader)
-        print(f"Epoch {epoch+1} Average Loss: {avg_loss}")
+        # --- Calculate and log average epoch loss ---
+        avg_loss = epoch_total_loss / len(dataloader)
+        print(f"Epoch {epoch+1} Average Loss: {avg_loss:.4f}")
+        log_writer.writerow([epoch + 1, avg_loss])
+        log_file.flush()
+        # -----------------------------------------
 
         # Save a checkpoint periodically
         if (epoch + 1) % 10 == 0:
             torch.save(diffusion_model.state_dict(), os.path.join(output_dir, f"diffusion_epoch_{epoch+1}.pt"))
+
+    # --- Close the log file ---
+    log_file.close()
+    # -------------------------
 
     torch.save(diffusion_model.state_dict(), config['diffusion_ckpt_path'])
     print(f"Diffusion model saved to {config['diffusion_ckpt_path']}")
