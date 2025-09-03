@@ -10,7 +10,7 @@ from torch.utils.data.dataloader import DataLoader
 from torchvision.utils import make_grid
 from tqdm import tqdm
 
-from dataset.sar_dataset import SARColorizationDataset
+from dataset.sar_dataset import SARDataset
 
 from models.vqvae import VQVAE
 
@@ -32,7 +32,7 @@ def infer(args):
     
     # Create the dataset
     im_dataset_cls = {
-        'sar_colorization': SARColorizationDataset,
+        'sar': SARDataset,
     }.get(dataset_config['name'])
     
     im_dataset = im_dataset_cls(split='train',

@@ -10,8 +10,7 @@ from models.vqvae import VQVAE
 from models.lpips import LPIPS
 from models.discriminator import Discriminator
 from torch.utils.data.dataloader import DataLoader
-
-from dataset.sar_dataset import SARColorizationDataset
+from dataset.sar_dataset import SARDataset
 from torch.optim import Adam
 from torchvision.utils import make_grid
 
@@ -45,7 +44,7 @@ def train(args):
                   model_config=autoencoder_config).to(device)
     # Create the dataset
     im_dataset_cls = {
-        'sar_colorization': SARColorizationDataset,
+        'sar': SARDataset,
     }.get(dataset_config['name'])
     
     im_dataset = im_dataset_cls(split='train',
@@ -54,14 +53,14 @@ def train(args):
                                 im_channels=dataset_config['im_channels'])
     
     data_loader = DataLoader(im_dataset,
-                             batch_size=train_config['autoencoder_batch_size'],
+                             batch_size=train_config['vqvae_batch_size'],
                              shuffle=True)
     
     # Create output directories
     if not os.path.exists(train_config['task_name']):
         os.mkdir(train_config['task_name'])
         
-    num_epochs = train_config['autoencoder_epochs']
+    num_epochs = train_config['vqvae_epochs']
 
     # L1/L2 loss for Reconstruction
     recon_criterion = torch.nn.MSELoss()
@@ -72,8 +71,8 @@ def train(args):
     lpips_model = LPIPS().eval().to(device)
     discriminator = Discriminator(im_channels=dataset_config['im_channels']).to(device)
     
-    optimizer_d = Adam(discriminator.parameters(), lr=train_config['autoencoder_lr'], betas=(0.5, 0.999))
-    optimizer_g = Adam(model.parameters(), lr=train_config['autoencoder_lr'], betas=(0.5, 0.999))
+    optimizer_d = Adam(discriminator.parameters(), lr=train_config['vqvae_lr'], betas=(0.5, 0.999))
+    optimizer_g = Adam(model.parameters(), lr=train_config['vqvae_lr'], betas=(0.5, 0.999))
     
     disc_step_start = train_config['disc_start']
     step_count = 0
@@ -81,7 +80,8 @@ def train(args):
     # This is for accumulating gradients incase the images are huge
     # And one cant afford higher batch sizes
     acc_steps = train_config['autoencoder_acc_steps']
-    image_save_steps = train_config['autoencoder_img_save_steps']
+    # Set a default value for image save steps
+    image_save_steps = 500  # Save sample images every 500 steps
     img_save_count = 0
     
     for epoch_idx in range(num_epochs):

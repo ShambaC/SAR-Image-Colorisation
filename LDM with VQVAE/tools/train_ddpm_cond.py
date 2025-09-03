@@ -3,7 +3,7 @@ import argparse
 import numpy as np
 from tqdm import tqdm
 from torch.optim import Adam
-from dataset.sar_dataset import SARColorizationDataset
+from dataset.sar_dataset import SARDataset
 from torch.utils.data import DataLoader
 from models.unet_cond_base import Unet
 from models.vqvae import VQVAE
@@ -57,7 +57,7 @@ def train(args):
                 empty_text_embed = get_text_representation([''], text_tokenizer, text_model, device)
             
     im_dataset_cls = {
-        'sar_colorization': SARColorizationDataset,
+        'sar': SARDataset,
     }.get(dataset_config['name'])
     
     im_dataset = im_dataset_cls(split='train',
