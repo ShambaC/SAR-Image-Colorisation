@@ -1,14 +1,22 @@
-dataset_params:
-  im_path: 'data/SAR_Dataset'
-  im_channels : 3
-  im_size : 256
-  name: 'sar_colorization'
+task_name: "sar_colorization"
+dataset_name: "sar_colorization"
+dataset_path: "data/SAR_Dataset"
+output_dir: "./output"
 
-diffusion_params:
-  num_timesteps : 1000
-  beta_start : 0.0001
-  beta_end : 0.02
+train_batch_size: 4
+val_batch_size: 4
+num_workers: 4
+image_size: 256
+autoencoder_acc_steps: 1
+save_latents: True
 
+autoencoder_config:
+  embedding_dim: 256
+  n_codes: 2048
+  n_filters: 128
+  down_sampling_levels: [2, 2, 2, 2]
+  n_res_blocks: 2
+  
 ldm_params:
   in_channels: 256
   out_channels: 256
@@ -18,7 +26,11 @@ ldm_params:
   attention_levels: [0, 1, 2]
   channel_multipliers: [1, 2, 4, 4]
   n_blocks: 2
+  timesteps: 1000
+  beta_start: 0.0001
+  beta_end: 0.02
   time_embedding_dim: 256
+  
   condition_config:
     condition_types: [ 'text', 'image' ]
     text_condition_config:
@@ -32,35 +44,10 @@ ldm_params:
        image_condition_w : 256
        cond_drop_prob: 0.1
 
-autoencoder_params:
-  embedding_dim: 256
-  n_codes: 2048
-  n_filters: 128
-  down_sampling_levels: [2, 2, 2, 2]
-  n_res_blocks: 2
-  z_channels: 256 # This was inferred from ldm_params.in_channels
+optimizer_params:
+  lr: 0.0001
 
-train_params:
-  seed : 1111
-  task_name: 'sar_colorization'
-  ldm_batch_size: 4
-  autoencoder_batch_size: 4
-  disc_start: 15000
-  disc_weight: 0.5
-  codebook_weight: 1
-  commitment_beta: 0.2
-  perceptual_weight: 1
-  ldm_epochs: 100
-  autoencoder_epochs: 20
-  num_samples: 1
-  num_grid_rows: 1
-  ldm_lr: 0.0001
-  autoencoder_lr: 0.0001
-  autoencoder_acc_steps: 1
-  autoencoder_img_save_steps: 100
-  save_latents : True
-  vqvae_latent_dir_name: 'vqvae_latents'
-  ldm_ckpt_name: 'ldm.pth'
-  vqvae_autoencoder_ckpt_name: 'vqvae.pth'
-  vqvae_discriminator_ckpt_name: 'vqvae_discriminator.pth'
-  guidance_scale: 7.5
+train_steps: 100000
+val_steps: 1000
+log_steps: 100
+save_steps: 1000
