@@ -22,7 +22,7 @@ num_workers: 2
 # -----------------
 vae_train:
   epochs: 50
-  lr: 2e-5
+  lr: 2.0e-5
   kl_weight: 0.1 # Weight for the KL divergence loss component
 
 # -----------------
@@ -30,7 +30,7 @@ vae_train:
 # -----------------
 diffusion_train:
   epochs: 100
-  lr: 1e-5
+  lr: 1.0e-5
   num_inference_steps: 50 # For validation/testing during training
   cfg_scale: 7.5
 
