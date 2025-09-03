@@ -1,3 +1,4 @@
+import os
 import torch
 import numpy as np
 from PIL import Image
@@ -54,7 +55,7 @@ def inference(args):
     s1_tensor = transform(input_image).unsqueeze(0).to(device)
     
     sampler = DDPMSampler(torch.Generator(device=device))
-    sampler.set_inference_timesteps(config['diffusion_train']['n_inference_steps'])
+    sampler.set_inference_timesteps(config['diffusion_train']['num_inference_steps'])
 
     latents_shape = (1, 4, config['image_height'] // 8, config['image_width'] // 8)
 
@@ -69,7 +70,16 @@ def inference(args):
         context = torch.cat([cond_context, uncond_context])
 
         # --- Image Conditioning ---
-        condition_latents = encoder(s1_tensor, torch.randn_like(s1_tensor[:, :4, ::8, ::8]))
+
+        latent_noise_shape = (
+            s1_tensor.shape[0], 
+            4, 
+            config['image_height'] // 8, 
+            config['image_width'] // 8
+        )
+        conditional_noise = torch.randn(latent_noise_shape, device=device)
+
+        condition_latents = encoder(s1_tensor, conditional_noise)
         condition_latents_cfg = torch.cat([condition_latents, condition_latents])
 
         # --- Denoising Loop ---

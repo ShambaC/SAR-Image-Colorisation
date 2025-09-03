@@ -74,10 +74,19 @@ def train(config):
             # 1. Encode target image into latent space with VAE
             # Use no_grad as VAE is frozen
             with torch.no_grad():
-                target_latents = encoder(s2_images, torch.randn_like(s2_images[:, :4, ::8, ::8]))
+                # Shape: (Batch_Size, 4, Height/8, Width/8)
+                latent_noise_shape = (
+                    s2_images.shape[0], 
+                    4, 
+                    config['image_height'] // 8, 
+                    config['image_width'] // 8
+                )
+                encoder_noise = torch.randn(latent_noise_shape, device=device)
+
+                target_latents = encoder(s2_images, encoder_noise)
 
                 # Also encode the conditional (grayscale) image
-                condition_latents = encoder(s1_images, torch.randn_like(s1_images[:, :4, ::8, ::8]))
+                condition_latents = encoder(s1_images, encoder_noise)
 
             # 2. Sample a random timestep and add noise to target latents
             timesteps = torch.randint(0, sampler.num_train_timesteps, (target_latents.shape[0],), device=device)

@@ -45,8 +45,8 @@ class SARTrainDataset(Dataset):
 
     def __getitem__(self, idx):
         # Load images
-        s1_path = os.path.join(self.data_root, self.s1_files[idx])
-        s2_path = os.path.join(self.data_root, self.s2_files[idx])
+        s1_path = os.path.join(self.data_root, self.s1_files[idx].replace('\\', '/'))
+        s2_path = os.path.join(self.data_root, self.s2_files[idx].replace('\\', '/'))
         
         s1_img = Image.open(s1_path).convert("RGB") # Convert to RGB
         s2_img = Image.open(s2_path).convert("RGB")
