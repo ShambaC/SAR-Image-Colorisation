@@ -20,7 +20,7 @@ class SARDataset(Dataset):
     """
     
     def __init__(self, split, im_path, im_size=256, im_channels=3, im_ext='jpg',
-                 use_latents=False, latent_path=None, condition_config=None):
+                 use_latents=False, latent_path=None, condition_config=None, return_path=False):
         self.split = split
         self.im_size = im_size
         self.im_channels = im_channels
@@ -28,6 +28,7 @@ class SARDataset(Dataset):
         self.im_path = im_path
         self.latent_maps = None
         self.use_latents = False
+        self.return_path = return_path
         
         self.condition_types = [] if condition_config is None else condition_config['condition_types']
         
@@ -156,10 +157,16 @@ class SARDataset(Dataset):
         
         if self.use_latents:
             latent = self.latent_maps[self.color_images[index]]
-            if len(self.condition_types) == 0:
-                return latent
+            if self.return_path:
+                if len(self.condition_types) == 0:
+                    return latent, self.color_images[index]
+                else:
+                    return latent, cond_inputs, self.color_images[index]
             else:
-                return latent, cond_inputs
+                if len(self.condition_types) == 0:
+                    return latent
+                else:
+                    return latent, cond_inputs
         else:
             # Load color image (target)
             color_im = Image.open(self.color_images[index])
@@ -176,7 +183,13 @@ class SARDataset(Dataset):
             # Convert input to -1 to 1 range.
             color_tensor = (2 * color_tensor) - 1
             
-            if len(self.condition_types) == 0:
-                return color_tensor
+            if self.return_path:
+                if len(self.condition_types) == 0:
+                    return color_tensor, self.color_images[index]
+                else:
+                    return color_tensor, cond_inputs, self.color_images[index]
             else:
-                return color_tensor, cond_inputs
+                if len(self.condition_types) == 0:
+                    return color_tensor
+                else:
+                    return color_tensor, cond_inputs

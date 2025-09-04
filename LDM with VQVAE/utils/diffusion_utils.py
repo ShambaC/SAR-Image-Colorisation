@@ -11,10 +11,17 @@ def load_latents(latent_path):
     :return:
     """
     latent_maps = {}
-    for fname in glob.glob(os.path.join(latent_path, '*.pkl')):
-        s = pickle.load(open(fname, 'rb'))
-        for k, v in s.items():
-            latent_maps[k] = v[0]
+    for fname in glob.glob(os.path.join(latent_path, '*.pt')):
+        # Extract filename without extension
+        filename_with_ext = os.path.basename(fname)
+        filename_key = os.path.splitext(filename_with_ext)[0]
+        
+        # Convert safe filename back to original path format
+        original_key = filename_key.replace('_', '/')
+        
+        # Load the tensor directly using torch.load
+        latent_tensor = torch.load(fname, map_location='cpu')
+        latent_maps[original_key] = latent_tensor
     return latent_maps
 
 

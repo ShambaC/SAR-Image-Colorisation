@@ -38,7 +38,8 @@ def infer(args):
     im_dataset = im_dataset_cls(split='train',
                                 im_path=dataset_config['im_path'],
                                 im_size=dataset_config['im_size'],
-                                im_channels=dataset_config['im_channels'])
+                                im_channels=dataset_config['im_channels'],
+                                return_path=True)  # Enable path return for latent saving
     
     # This is only used for saving latents. Which as of now
     # is not done in batches hence batch size 1
@@ -50,7 +51,16 @@ def infer(args):
     ngrid = train_config['num_grid_rows']
     
     idxs = torch.randint(0, len(im_dataset) - 1, (num_images,))
-    ims = torch.cat([im_dataset[idx][None, :] for idx in idxs]).float()
+    # Handle the fact that dataset now returns tuples when return_path=True
+    ims = []
+    for idx in idxs:
+        data = im_dataset[idx]
+        if isinstance(data, (list, tuple)):
+            im = data[0]  # First element is always the image tensor
+        else:
+            im = data
+        ims.append(im[None, :])
+    ims = torch.cat(ims).float()
     ims = ims.to(device)
     
     model = VQVAE(im_channels=dataset_config['im_channels'],
@@ -85,18 +95,31 @@ def infer(args):
             # save Latents (but in a very unoptimized way)
             latent_path = os.path.join(train_config['task_name'], train_config['vqvae_latent_dir_name'])
             latent_fnames = glob.glob(os.path.join(train_config['task_name'], train_config['vqvae_latent_dir_name'],
-                                                   '*.pkl'))
+                                                   '*.pt'))
             assert len(latent_fnames) == 0, 'Latents already present. Delete all latent files and re-run'
             if not os.path.exists(latent_path):
                 os.mkdir(latent_path)
             print('Saving Latents for {}'.format(dataset_config['name']))
             
             for idx, data in enumerate(tqdm(data_loader)):
-                im = data[0] if isinstance(data, list) else data
+                if isinstance(data, (list, tuple)):
+                    # When return_path=True, the last element is the file path
+                    if len(data) == 2:  # (image, path)
+                        im, color_image_path = data
+                    elif len(data) == 3:  # (image, conditions, path)
+                        im, _, color_image_path = data
+                    else:
+                        im = data[0]
+                        color_image_path = f"image_{idx}"  # fallback
+                else:
+                    im = data
+                    color_image_path = f"image_{idx}"  # fallback
+                
                 encoded_output, _ = model.encode(im.float().to(device))
                 
-                # Use index as filename for the latent
-                latent_filename = f"{idx}.pt"
+                # Create a safe filename from the path
+                safe_filename = color_image_path[0].replace('/', '_').replace('\\', '_').replace(':', '_')
+                latent_filename = f"{safe_filename}.pt"
                 torch.save(encoded_output.cpu(), os.path.join(latent_path, latent_filename))
             print('Done saving latents')
 
