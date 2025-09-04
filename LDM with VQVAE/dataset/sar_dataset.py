@@ -156,7 +156,7 @@ class SARDataset(Dataset):
         #######################################
         
         if self.use_latents:
-            latent = self.latent_maps[self.color_images[index]]
+            latent = self.latent_maps[self.color_images[index].replace('/', '_').replace('\\', '_').replace(':', '_')]
             if self.return_path:
                 if len(self.condition_types) == 0:
                     return latent, self.color_images[index]

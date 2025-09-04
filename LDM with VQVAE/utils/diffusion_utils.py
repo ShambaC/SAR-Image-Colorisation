@@ -16,12 +16,9 @@ def load_latents(latent_path):
         filename_with_ext = os.path.basename(fname)
         filename_key = os.path.splitext(filename_with_ext)[0]
         
-        # Convert safe filename back to original path format
-        original_key = filename_key.replace('_', '/')
-        
         # Load the tensor directly using torch.load
         latent_tensor = torch.load(fname, map_location='cpu')
-        latent_maps[original_key] = latent_tensor
+        latent_maps[filename_key] = latent_tensor
     return latent_maps
 
 
