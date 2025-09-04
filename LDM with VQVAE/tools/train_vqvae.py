@@ -5,6 +5,7 @@ import random
 import torchvision
 import os
 import numpy as np
+import pandas as pd
 from tqdm import tqdm
 from models.vqvae import VQVAE
 from models.lpips import LPIPS
@@ -59,6 +60,10 @@ def train(args):
     # Create output directories
     if not os.path.exists(train_config['task_name']):
         os.mkdir(train_config['task_name'])
+    
+    # Initialize statistics tracking
+    stats_data = []
+    stats_file = os.path.join(train_config['task_name'], 'vqvae_training_stats.csv')
         
     num_epochs = train_config['vqvae_epochs']
 
@@ -171,22 +176,41 @@ def train(args):
         optimizer_d.zero_grad()
         optimizer_g.step()
         optimizer_g.zero_grad()
+        
+        # Calculate epoch statistics
+        epoch_stats = {
+            'epoch': epoch_idx + 1,
+            'recon_loss': np.mean(recon_losses),
+            'perceptual_loss': np.mean(perceptual_losses),
+            'codebook_loss': np.mean(codebook_losses),
+            'total_loss': np.mean(losses)
+        }
+        
         if len(disc_losses) > 0:
+            epoch_stats['gen_loss'] = np.mean(gen_losses)
+            epoch_stats['disc_loss'] = np.mean(disc_losses)
             print(
                 'Finished epoch: {} | Recon Loss : {:.4f} | Perceptual Loss : {:.4f} | '
                 'Codebook : {:.4f} | G Loss : {:.4f} | D Loss {:.4f}'.
                 format(epoch_idx + 1,
-                       np.mean(recon_losses),
-                       np.mean(perceptual_losses),
-                       np.mean(codebook_losses),
-                       np.mean(gen_losses),
-                       np.mean(disc_losses)))
+                       epoch_stats['recon_loss'],
+                       epoch_stats['perceptual_loss'],
+                       epoch_stats['codebook_loss'],
+                       epoch_stats['gen_loss'],
+                       epoch_stats['disc_loss']))
         else:
+            epoch_stats['gen_loss'] = 0.0
+            epoch_stats['disc_loss'] = 0.0
             print('Finished epoch: {} | Recon Loss : {:.4f} | Perceptual Loss : {:.4f} | Codebook : {:.4f}'.
                   format(epoch_idx + 1,
-                         np.mean(recon_losses),
-                         np.mean(perceptual_losses),
-                         np.mean(codebook_losses)))
+                         epoch_stats['recon_loss'],
+                         epoch_stats['perceptual_loss'],
+                         epoch_stats['codebook_loss']))
+        
+        # Save epoch statistics
+        stats_data.append(epoch_stats)
+        df_stats = pd.DataFrame(stats_data)
+        df_stats.to_csv(stats_file, index=False)
         
         torch.save(model.state_dict(), os.path.join(train_config['task_name'],
                                                     train_config['vqvae_autoencoder_ckpt_name']))

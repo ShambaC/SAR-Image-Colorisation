@@ -21,6 +21,7 @@ matplotlib
 numpy
 opencv-python
 packaging
+pandas
 Pillow
 pyparsing
 python-dateutil

@@ -1,6 +1,7 @@
 import yaml
 import argparse
 import numpy as np
+import pandas as pd
 from tqdm import tqdm
 from torch.optim import Adam
 from dataset.sar_dataset import SARDataset
@@ -106,6 +107,10 @@ def train(args):
         for param in vae.parameters():
             param.requires_grad = False
     
+    # Initialize statistics tracking
+    stats_data = []
+    stats_file = os.path.join(train_config['task_name'], 'ldm_training_stats.csv')
+    
     # Run training
     for epoch_idx in range(num_epochs):
         losses = []
@@ -167,9 +172,25 @@ def train(args):
             losses.append(loss.item())
             loss.backward()
             optimizer.step()
+        
+        # Calculate epoch statistics
+        epoch_loss = np.mean(losses)
+        epoch_stats = {
+            'epoch': epoch_idx + 1,
+            'loss': epoch_loss,
+            'num_batches': len(data_loader),
+            'batch_size': train_config['ldm_batch_size']
+        }
+        
         print('Finished epoch:{} | Loss : {:.4f}'.format(
             epoch_idx + 1,
-            np.mean(losses)))
+            epoch_loss))
+        
+        # Save epoch statistics
+        stats_data.append(epoch_stats)
+        df_stats = pd.DataFrame(stats_data)
+        df_stats.to_csv(stats_file, index=False)
+        
         torch.save(model.state_dict(), os.path.join(train_config['task_name'],
                                                     train_config['ldm_ckpt_name']))
     
