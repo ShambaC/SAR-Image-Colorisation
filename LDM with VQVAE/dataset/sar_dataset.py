@@ -92,12 +92,12 @@ class SARDataset(Dataset):
             for _, row in df.iterrows():
                 try:
                     # Get file paths (fix double backslashes to forward slashes)
-                    s1_file = str(row['s1_fileName']).replace('\\\\', '/').replace('\\', '/')
-                    s2_file = str(row['s2_fileName']).replace('\\\\', '/').replace('\\', '/')
+                    s1_file = str(row['s1_fileName']).replace('\\', '/')
+                    s2_file = str(row['s2_fileName']).replace('\\', '/')
                     
                     # Convert to absolute paths relative to the data folder
-                    s1_path = os.path.join(im_path, s1_file)
-                    s2_path = os.path.join(im_path, s2_file)
+                    s1_path = os.path.join(sar_dataset_path, s1_file)
+                    s2_path = os.path.join(sar_dataset_path, s2_file)
                     
                     # Check if files exist
                     if not os.path.exists(s1_path):
