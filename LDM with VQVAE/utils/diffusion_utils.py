@@ -18,6 +18,12 @@ def load_latents(latent_path):
         
         # Load the tensor directly using torch.load
         latent_tensor = torch.load(fname, map_location='cpu')
+        
+        # Remove extra batch dimension if present (from DataLoader batch_size=1)
+        # The tensor might be [1, channels, height, width] and we want [channels, height, width]
+        if latent_tensor.dim() == 4 and latent_tensor.shape[0] == 1:
+            latent_tensor = latent_tensor.squeeze(0)
+        
         latent_maps[filename_key] = latent_tensor
     return latent_maps
 

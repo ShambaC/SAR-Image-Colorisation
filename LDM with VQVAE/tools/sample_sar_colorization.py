@@ -60,15 +60,24 @@ def sample(args):
         )
         empty_text_embed = get_text_representation([''], text_tokenizer, text_model, device)
 
-    # Prepare image conditioning
-    gray_transform = transforms.Compose([
+    # Prepare input image
+    transform = transforms.Compose([
         transforms.Resize((dataset_config.get('im_size', 256), dataset_config.get('im_size', 256))),
         transforms.ToTensor(),
-        transforms.Normalize(mean=[0.5], std=[0.5])
+        transforms.Lambda(lambda x: (2 * x) - 1)  # Convert to [-1, 1] range like training
     ])
-    gray_image = Image.open(args.gray_image_path).convert('L')
-    gray_image_tensor = gray_transform(gray_image).unsqueeze(0).to(device)
+    
+    # Load and process the input image
+    input_image = Image.open(args.gray_image_path)
+    if input_image.mode != 'RGB':
+        input_image = input_image.convert('RGB')
+    
+    input_tensor = transform(input_image).unsqueeze(0).to(device)
 
+    # Prepare image conditioning - encode the input image to latent space
+    with torch.no_grad():
+        input_latent, _ = vae.encode(input_tensor)
+    
     # Generate text prompt
     text_prompt = f"Colorize the image, Region: {args.region}, Season: {args.season}"
     
@@ -76,12 +85,13 @@ def sample(args):
         # Get text representation
         text_condition = get_text_representation([text_prompt], text_tokenizer, text_model, device)
 
-        cond_input = {'text': text_condition, 'image': gray_image_tensor}
+        cond_input = {'text': text_condition}
 
-        # Sampling loop
-        x = torch.randn(1, autoencoder_model_config.get('z_channels', 256), 
-                        dataset_config.get('im_size', 256) // (2**len(autoencoder_model_config.get('down_sampling_levels', []))), 
-                        dataset_config.get('im_size', 256) // (2**len(autoencoder_model_config.get('down_sampling_levels', [])))).to(device)
+        # Sampling loop - Initialize latent tensor with correct dimensions
+        # For VQVAE with 4 latent channels and proper downsampling
+        latent_size = dataset_config.get('im_size', 256) // 8  # Typical downsampling factor for VQVAE
+        x = torch.randn(1, autoencoder_model_config.get('z_channels', 4), 
+                       latent_size, latent_size).to(device)
 
         for t in tqdm(reversed(range(scheduler.num_timesteps))):
             t_tensor = torch.full((1,), t, dtype=torch.long, device=device)
@@ -90,16 +100,42 @@ def sample(args):
             # Predict noise with conditioning
             noise_pred_cond = model(x, t_tensor, cond_input)
             
-            # Predict noise without text conditioning (but with image conditioning)
-            uncond_input = {'text': empty_text_embed, 'image': gray_image_tensor}
+            # Predict noise without text conditioning
+            uncond_input = {'text': empty_text_embed}
             noise_pred_uncond = model(x, t_tensor, uncond_input)
             
-            # Combine predictions
+            # Combine predictions with classifier-free guidance
             guidance_scale = train_config.get('guidance_scale', 7.5)
             noise_pred = noise_pred_uncond + guidance_scale * (noise_pred_cond - noise_pred_uncond)
 
-            # Denoise
-            x = scheduler.denoise(x, noise_pred, t)
+            # Proper DDPM denoising step
+            if t == 0:
+                # Final step - just subtract the noise
+                x = x - noise_pred
+            else:
+                # Get scheduler parameters
+                if hasattr(scheduler, 'alpha_cumprod'):
+                    alpha_t = scheduler.alpha_cumprod[t]
+                    alpha_t_prev = scheduler.alpha_cumprod[t-1] if t > 0 else 1.0
+                else:
+                    # Fallback calculation
+                    beta_t = scheduler.beta_start + (scheduler.beta_end - scheduler.beta_start) * t / scheduler.num_timesteps
+                    alpha_t = 1.0 - beta_t
+                    alpha_t_prev = 1.0 - (scheduler.beta_start + (scheduler.beta_end - scheduler.beta_start) * (t-1) / scheduler.num_timesteps) if t > 0 else 1.0
+                
+                # Convert to tensors
+                alpha_t = torch.tensor(alpha_t, device=device)
+                alpha_t_prev = torch.tensor(alpha_t_prev, device=device)
+                
+                # DDPM reverse step
+                x_0_pred = (x - torch.sqrt(1 - alpha_t) * noise_pred) / torch.sqrt(alpha_t)
+                x = torch.sqrt(alpha_t_prev) * x_0_pred + torch.sqrt(1 - alpha_t_prev) * noise_pred
+                
+                # Add noise for non-final steps
+                if t > 1:
+                    noise = torch.randn_like(x)
+                    sigma_t = torch.sqrt((1 - alpha_t_prev) / (1 - alpha_t)) * torch.sqrt(1 - alpha_t / alpha_t_prev)
+                    x = x + sigma_t * noise
 
         # Decode the generated latent
         decoded_image = vae.decode(x)
