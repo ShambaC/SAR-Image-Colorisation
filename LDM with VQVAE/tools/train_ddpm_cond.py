@@ -79,6 +79,38 @@ def train(args):
                  model_config=diffusion_model_config).to(device)
     model.train()
     
+    # Load existing checkpoint if specified
+    start_epoch = 0
+    if hasattr(args, 'resume_from_checkpoint') and args.resume_from_checkpoint:
+        checkpoint_path = os.path.join(train_config['task_name'], train_config['ldm_ckpt_name'])
+        if os.path.exists(checkpoint_path):
+            print(f'Loading checkpoint from {checkpoint_path}')
+            model.load_state_dict(torch.load(checkpoint_path, map_location=device))
+            # Try to load epoch info if available
+            try:
+                stats_file_path = os.path.join(train_config['task_name'], 'ldm_training_stats.csv')
+                if os.path.exists(stats_file_path):
+                    existing_stats = pd.read_csv(stats_file_path)
+                    start_epoch = len(existing_stats)
+                    print(f'Resuming from epoch {start_epoch}')
+            except:
+                print('Could not determine last epoch, starting from epoch 0')
+        else:
+            print(f'Checkpoint not found at {checkpoint_path}, starting from scratch')
+    elif os.path.exists(os.path.join(train_config['task_name'], train_config['ldm_ckpt_name'])) and train_config.get('auto_resume', False):
+        # Auto-resume if checkpoint exists and auto_resume is enabled in config
+        checkpoint_path = os.path.join(train_config['task_name'], train_config['ldm_ckpt_name'])
+        print(f'Auto-resuming from checkpoint: {checkpoint_path}')
+        model.load_state_dict(torch.load(checkpoint_path, map_location=device))
+        try:
+            stats_file_path = os.path.join(train_config['task_name'], 'ldm_training_stats.csv')
+            if os.path.exists(stats_file_path):
+                existing_stats = pd.read_csv(stats_file_path)
+                start_epoch = len(existing_stats)
+                print(f'Auto-resuming from epoch {start_epoch}')
+        except:
+            print('Could not determine last epoch, starting from epoch 0')
+    
     vae = None
     # Load VAE ONLY if latents are not to be saved or some are missing
     if not im_dataset.use_latents:
@@ -111,10 +143,21 @@ def train(args):
     stats_data = []
     stats_file = os.path.join(train_config['task_name'], 'ldm_training_stats.csv')
     
+    # Load existing statistics if resuming
+    if start_epoch > 0 and os.path.exists(stats_file):
+        existing_stats = pd.read_csv(stats_file)
+        stats_data = existing_stats.to_dict('records')
+        print(f'Loaded {len(stats_data)} existing training records')
+    
     best_loss = np.inf
+        
+    # Load best loss from existing stats if available
+    if stats_data:
+        best_loss = min([stat['loss'] for stat in stats_data])
+        print(f'Previous best loss: {best_loss:.4f}')
 
     # Run training
-    for epoch_idx in range(num_epochs):
+    for epoch_idx in range(start_epoch, num_epochs):
         losses = []
         for data in tqdm(data_loader):
             cond_input = None
@@ -209,5 +252,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Arguments for ddpm training')
     parser.add_argument('--config', dest='config_path',
                         default='config/sar_colorization.yaml', type=str)
+    parser.add_argument('--resume', dest='resume_from_checkpoint', action='store_true',
+                        help='Resume training from existing checkpoint')
     args = parser.parse_args()
     train(args)
