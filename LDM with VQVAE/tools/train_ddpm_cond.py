@@ -111,6 +111,8 @@ def train(args):
     stats_data = []
     stats_file = os.path.join(train_config['task_name'], 'ldm_training_stats.csv')
     
+    best_loss = np.inf
+
     # Run training
     for epoch_idx in range(num_epochs):
         losses = []
@@ -191,6 +193,12 @@ def train(args):
         df_stats = pd.DataFrame(stats_data)
         df_stats.to_csv(stats_file, index=False)
         
+        if epoch_loss < best_loss:
+            best_loss = epoch_loss
+            print(f'Saving model with best loss: {best_loss:.4f} at epoch {epoch_idx + 1}')
+            torch.save(model.state_dict(), os.path.join(train_config['task_name'],
+                                                    train_config['ldm_best_ckpt_name']))
+
         torch.save(model.state_dict(), os.path.join(train_config['task_name'],
                                                     train_config['ldm_ckpt_name']))
     

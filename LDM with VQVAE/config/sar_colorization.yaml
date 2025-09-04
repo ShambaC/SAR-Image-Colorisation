@@ -72,6 +72,7 @@ train_params:
   vqvae_autoencoder_ckpt_name: 'vqvae_autoencoder_ckpt.pth'
   vqvae_discriminator_ckpt_name: 'vqvae_discriminator_ckpt.pth' 
   ldm_ckpt_name: 'ldm_ckpt.pth'
+  ldm_best_ckpt_name: 'ldm_best_ckpt.pth'
   vqvae_latent_dir_name: 'vqvae_latents'
   
   # Inference params
