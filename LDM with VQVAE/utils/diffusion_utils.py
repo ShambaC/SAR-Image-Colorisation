@@ -6,14 +6,25 @@ import torch
 
 def load_latents(latent_path):
     r"""
-    Simple utility to load latents to speed up ldm training
+    Simple utility to save latents to speed up ldm training
     :param latent_path:
     :return:
     """
     latent_maps = {}
     for fname in glob.glob(os.path.join(latent_path, '*.pt')):
-        data = torch.load(fname, map_location='cpu')
-        latent_maps[data['path']] = data['latent']
+        # Extract filename without extension
+        filename_with_ext = os.path.basename(fname)
+        filename_key = os.path.splitext(filename_with_ext)[0]
+        
+        # Load the tensor directly using torch.load
+        latent_tensor = torch.load(fname, map_location='cpu')
+        
+        # Remove extra batch dimension if present (from DataLoader batch_size=1)
+        # The tensor might be [1, channels, height, width] and we want [channels, height, width]
+        if latent_tensor.dim() == 4 and latent_tensor.shape[0] == 1:
+            latent_tensor = latent_tensor.squeeze(0)
+        
+        latent_maps[filename_key] = latent_tensor
     return latent_maps
 
 
